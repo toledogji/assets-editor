@@ -7,6 +7,7 @@ const EDITOR_CONFIG = {
   dxb:  { label: 'DxB',        type: 'dxb',  toleranceMs: 3000, routingIds: ['XMEV_1','XMEV_2','XMEV_3','XMEV_4'], rootKey: 'DxB' },
   dxc:  { label: 'DxC',        type: 'dxb',  toleranceMs: 5000, routingIds: ['XMEV_1','XMEV_2','XMEV_3'],          rootKey: 'DxB' },
   tita: { label: 'TITA Bonds', type: 'tita', toleranceMs: 1000, rootKey: 'TITA',
+    routingIds: ['XMEV', 'XMEV_2'],
     tradingGroups: ['BONOS', 'LETRAS', 'ONs', 'REPO'],
     securityTypes: ['BOND', 'NEGOTIABLE_BOND', 'LETRAS_DEL_TESORO'],
   },
@@ -60,6 +61,7 @@ function renderAll() {
   if (type === 'tita') {
     renderTitaChecklist();
     renderTitaEditList();
+    renderRoutingBalance();
   } else {
     renderChecklist();
     renderEditList();
@@ -219,6 +221,7 @@ function renderTitaChecklist() {
             ${tgBadge(entry.TradingGroup)}
             <div class="entry-meta">
               <strong>Underlying:</strong> ${entry.Underlying} &nbsp;|&nbsp;
+              <strong>Routing:</strong> ${entry.OrderRoutingId} &nbsp;|&nbsp;
               <strong>SecurityType:</strong> ${entry.Asset ? entry.Asset.SecurityType : 'REPO'} &nbsp;|&nbsp;
               <strong>MinQty:</strong> ${entry.MinimumQty} &nbsp;|&nbsp;
               <strong>LotSize:</strong> ${entry.LotSize} &nbsp;|&nbsp;
@@ -328,6 +331,17 @@ function renderEditList() {
     return;
   }
 
+  const firstTolerance = entryData.length > 0 ? entryData[0].ToleranceThresholdMs : 3000;
+  container.innerHTML = `
+    <div class="bulk-tolerance-bar">
+      <label for="bulk-tolerance">ToleranceThresholdMs — apply to all entries:</label>
+      <div class="bulk-tolerance-controls">
+        <input type="number" id="bulk-tolerance" value="${firstTolerance}" min="0" />
+        <button id="bulk-tolerance-btn" class="btn btn-secondary">Apply to All</button>
+      </div>
+    </div>
+  `;
+
   let html = '';
   for (const [tg, items] of grouped) {
     html += `
@@ -388,6 +402,10 @@ function renderEditList() {
                 <label>ARS Symbol</label>
                 <input type="text" class="ef-ars" value="${arsSym}" />
               </div>
+              <div class="form-group">
+                <label>ToleranceThresholdMs</label>
+                <input type="number" class="ef-tolerance" value="${entry.ToleranceThresholdMs}" min="0" />
+              </div>
             </div>
             <div class="edit-actions">
               <button class="btn btn-primary ef-save" data-idx="${idx}">Save</button>
@@ -402,7 +420,14 @@ function renderEditList() {
     html += `</div></div>`;
   }
 
-  container.innerHTML = html;
+  container.innerHTML += html;
+
+  // Bulk apply ToleranceThresholdMs
+  document.getElementById('bulk-tolerance-btn').addEventListener('click', async () => {
+    const val = parseInt(document.getElementById('bulk-tolerance').value, 10);
+    if (isNaN(val)) { alert('Enter a valid number.'); return; }
+    await saveAssets(entryData.map(e => ({ ...e, ToleranceThresholdMs: val })));
+  });
 
   container.querySelectorAll('.btn-edit').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -424,14 +449,15 @@ function renderEditList() {
       const idx = parseInt(btn.dataset.idx, 10);
       const panel = document.getElementById(`edit-panel-${idx}`);
 
-      const newTg  = panel.querySelector('.ef-tg').value.trim().toUpperCase();
-      const newRid = panel.querySelector('.ef-rid').value;
-      const newQty = parseInt(panel.querySelector('.ef-qty').value, 10);
-      const newUsd = panel.querySelector('.ef-usd').value.trim().toUpperCase();
-      const newExt = panel.querySelector('.ef-ext').value.trim().toUpperCase();
-      const newArs = panel.querySelector('.ef-ars').value.trim().toUpperCase();
+      const newTg        = panel.querySelector('.ef-tg').value.trim().toUpperCase();
+      const newRid       = panel.querySelector('.ef-rid').value;
+      const newQty       = parseInt(panel.querySelector('.ef-qty').value, 10);
+      const newUsd       = panel.querySelector('.ef-usd').value.trim().toUpperCase();
+      const newExt       = panel.querySelector('.ef-ext').value.trim().toUpperCase();
+      const newArs       = panel.querySelector('.ef-ars').value.trim().toUpperCase();
+      const newTolerance = parseInt(panel.querySelector('.ef-tolerance').value, 10);
 
-      if (!newTg || !newUsd || !newExt || !newArs || isNaN(newQty)) {
+      if (!newTg || !newUsd || !newExt || !newArs || isNaN(newQty) || isNaN(newTolerance)) {
         alert('All fields are required.');
         return;
       }
@@ -443,6 +469,7 @@ function renderEditList() {
         TradingGroup: newTg,
         OrderRoutingId: newRid,
         MinimumQty: newQty,
+        ToleranceThresholdMs: newTolerance,
         Assets: [
           { Symbol: newUsd, SecurityID: `${newUsd}-${seq}-C-CT-USD`, SecurityType: entry.Assets[0]?.SecurityType || 'BOND', Currency: 'USD', Underlying: newTg, SettlementType: entry.SettlementType },
           { Symbol: newExt, SecurityID: `${newExt}-${seq}-C-CT-EXT`, SecurityType: entry.Assets[1]?.SecurityType || 'BOND', Currency: 'EXT', Underlying: newTg, SettlementType: entry.SettlementType },
@@ -559,6 +586,13 @@ function renderTitaEditList() {
                   }
                 </select>
               </div>
+              <div class="form-group">
+                <label>Order Routing ID</label>
+                <select class="ef-tita-rid">
+                  <option value="XMEV" ${entry.OrderRoutingId === 'XMEV' ? 'selected' : ''}>XMEV</option>
+                  <option value="XMEV_2" ${entry.OrderRoutingId === 'XMEV_2' ? 'selected' : ''}>XMEV_2</option>
+                </select>
+              </div>
             </div>
             <div class="form-grid">
               <div class="form-group">
@@ -640,6 +674,7 @@ function renderTitaEditList() {
       const newTg        = panel.querySelector('.ef-tita-tg').value;
       const newSym       = panel.querySelector('.ef-tita-sym').value.trim().toUpperCase();
       const newSecType   = panel.querySelector('.ef-tita-sectype').value;
+      const newRid       = panel.querySelector('.ef-tita-rid').value;
       const newQty       = parseInt(panel.querySelector('.ef-tita-qty').value, 10);
       const newLot       = parseInt(panel.querySelector('.ef-tita-lot').value, 10);
       const newPx        = parseInt(panel.querySelector('.ef-tita-px').value, 10);
@@ -651,7 +686,7 @@ function renderTitaEditList() {
       }
 
       const entry = entryData[idx];
-      const updated = buildTitaEntry(newTg, newSym, newSecType, newQty, newLot, newPx);
+      const updated = buildTitaEntry(newTg, newSym, newSecType, newQty, newLot, newPx, newRid);
       updated.ToleranceThresholdMs = newTolerance;
 
       const newData = [...entryData];
@@ -675,21 +710,37 @@ function renderTitaEditList() {
 
 // ── Routing balance ────────────────────────────────────────────────────────
 function renderRoutingBalance() {
+  const { type } = EDITOR_CONFIG[currentEditor];
+  const elId = type === 'tita' ? 'tita-routing-balance' : 'routing-balance';
+  const el = document.getElementById(elId);
+  if (!el) return;
+
   const counts = {};
   routingIds().forEach(id => counts[id] = 0);
-  const seen = {};
-  entryData.forEach(entry => {
-    const key = entry.OrderRoutingId + '|' + entry.TradingGroup;
-    if (!seen[key] && counts[entry.OrderRoutingId] !== undefined) {
-      seen[key] = true;
-      counts[entry.OrderRoutingId]++;
-    }
-  });
+
+  if (type === 'tita') {
+    // Count total entries per OrderRoutingId
+    entryData.forEach(entry => {
+      if (counts[entry.OrderRoutingId] !== undefined) counts[entry.OrderRoutingId]++;
+    });
+  } else {
+    // Count unique TradingGroups per OrderRoutingId
+    const seen = {};
+    entryData.forEach(entry => {
+      const key = entry.OrderRoutingId + '|' + entry.TradingGroup;
+      if (!seen[key] && counts[entry.OrderRoutingId] !== undefined) {
+        seen[key] = true;
+        counts[entry.OrderRoutingId]++;
+      }
+    });
+  }
 
   const max = Math.max(...routingIds().map(id => counts[id]), 1);
   const minCount = Math.min(...routingIds().map(id => counts[id]));
+  const itemLabel = type === 'tita' ? 'entry' : 'trading group';
+  const itemLabelPlural = type === 'tita' ? 'entries' : 'trading groups';
 
-  document.getElementById('routing-balance').innerHTML = routingIds().map(id => {
+  el.innerHTML = routingIds().map(id => {
     const n = counts[id];
     const pct = Math.round((n / max) * 100);
     const isFewest = n === minCount;
@@ -700,7 +751,7 @@ function renderRoutingBalance() {
           ${isFewest ? '<span class="fewest-badge">fewest</span>' : ''}
         </div>
         <div class="routing-card-count">${n}</div>
-        <div class="routing-card-label">trading group${n !== 1 ? 's' : ''}</div>
+        <div class="routing-card-label">${n !== 1 ? itemLabelPlural : itemLabel}</div>
         <div class="routing-bar-wrap"><div class="routing-bar" style="width:${pct}%"></div></div>
       </div>
     `;
@@ -759,12 +810,12 @@ document.getElementById('add-form').addEventListener('submit', async e => {
 });
 
 // ── TITA build entry ───────────────────────────────────────────────────────
-function buildTitaEntry(tradingGroup, symbol, securityType, minQty, lotSize, pxFactor) {
+function buildTitaEntry(tradingGroup, symbol, securityType, minQty, lotSize, pxFactor, orderRoutingId = 'XMEV') {
   const isRepo = tradingGroup === 'REPO';
   const entry = {
     TradingGroup: tradingGroup,
     SecurityExchange: 'XMEV',
-    OrderRoutingId: 'XMEV',
+    OrderRoutingId: orderRoutingId,
     Underlying: symbol,
     Currency: 'ARS',
     MinimumQty: Number(minQty),
@@ -796,16 +847,17 @@ document.getElementById('tita-trading-group').addEventListener('change', () => {
 });
 
 document.getElementById('tita-preview-btn').addEventListener('click', () => {
-  const tradingGroup = document.getElementById('tita-trading-group').value;
-  const symbol       = document.getElementById('tita-symbol').value.trim().toUpperCase();
-  const securityType = document.getElementById('tita-security-type').value;
-  const minQty       = document.getElementById('tita-min-qty').value;
-  const lotSize      = document.getElementById('tita-lot-size').value;
-  const pxFactor     = document.getElementById('tita-px-factor').value;
+  const tradingGroup   = document.getElementById('tita-trading-group').value;
+  const symbol         = document.getElementById('tita-symbol').value.trim().toUpperCase();
+  const securityType   = document.getElementById('tita-security-type').value;
+  const orderRoutingId = document.getElementById('tita-order-routing-id').value;
+  const minQty         = document.getElementById('tita-min-qty').value;
+  const lotSize        = document.getElementById('tita-lot-size').value;
+  const pxFactor       = document.getElementById('tita-px-factor').value;
 
   if (!symbol) { showTitaResult('Please fill in all fields before previewing.', 'error'); return; }
 
-  const entry = buildTitaEntry(tradingGroup, symbol, securityType, minQty, lotSize, pxFactor);
+  const entry = buildTitaEntry(tradingGroup, symbol, securityType, minQty, lotSize, pxFactor, orderRoutingId);
   document.getElementById('tita-preview-json').textContent = JSON.stringify(entry, null, 2);
   document.getElementById('tita-preview-container').classList.remove('hidden');
   document.getElementById('tita-add-result').classList.add('hidden');
@@ -813,19 +865,20 @@ document.getElementById('tita-preview-btn').addEventListener('click', () => {
 
 document.getElementById('tita-add-form').addEventListener('submit', async e => {
   e.preventDefault();
-  const tradingGroup = document.getElementById('tita-trading-group').value;
-  const symbol       = document.getElementById('tita-symbol').value.trim().toUpperCase();
-  const securityType = document.getElementById('tita-security-type').value;
-  const minQty       = document.getElementById('tita-min-qty').value;
-  const lotSize      = document.getElementById('tita-lot-size').value;
-  const pxFactor     = document.getElementById('tita-px-factor').value;
+  const tradingGroup   = document.getElementById('tita-trading-group').value;
+  const symbol         = document.getElementById('tita-symbol').value.trim().toUpperCase();
+  const securityType   = document.getElementById('tita-security-type').value;
+  const orderRoutingId = document.getElementById('tita-order-routing-id').value;
+  const minQty         = document.getElementById('tita-min-qty').value;
+  const lotSize        = document.getElementById('tita-lot-size').value;
+  const pxFactor       = document.getElementById('tita-px-factor').value;
 
   if (entryData.some(d => d.TradingGroup === tradingGroup && d.Underlying === symbol)) {
     showTitaResult(`Entry for Underlying "${symbol}" in TradingGroup "${tradingGroup}" already exists.`, 'error');
     return;
   }
 
-  const entry = buildTitaEntry(tradingGroup, symbol, securityType, minQty, lotSize, pxFactor);
+  const entry = buildTitaEntry(tradingGroup, symbol, securityType, minQty, lotSize, pxFactor, orderRoutingId);
   await saveAssets([...entryData, entry], false, true);
 });
 
