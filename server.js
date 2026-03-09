@@ -5,19 +5,20 @@ const path = require('path');
 const app = express();
 const PORT = 3737;
 
-const ASSET_PATHS = {
-  dxb: path.resolve(__dirname, '../algo-trading-config-prod/dbb/config/assets.json'),
-  dxc: path.resolve(__dirname, '../algo-trading-config-prod/dbc/config/assets.json'),
+const EDITORS = {
+  dxb:  { file: path.resolve(__dirname, '../algo-trading-config-prod/dbb/config/assets.json'), rootKey: 'DxB' },
+  dxc:  { file: path.resolve(__dirname, '../algo-trading-config-prod/dbc/config/assets.json'), rootKey: 'DxB' },
+  tita: { file: path.resolve(__dirname, '../algo-trading-config-prod/futop-tita/assets.json'), rootKey: 'TITA' },
 };
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/api/assets/:editor', (req, res) => {
-  const filePath = ASSET_PATHS[req.params.editor];
-  if (!filePath) return res.status(400).json({ error: 'Unknown editor: ' + req.params.editor });
+  const editor = EDITORS[req.params.editor];
+  if (!editor) return res.status(400).json({ error: 'Unknown editor: ' + req.params.editor });
   try {
-    const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    const data = JSON.parse(fs.readFileSync(editor.file, 'utf8'));
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: 'Failed to read assets.json: ' + err.message });
@@ -25,14 +26,14 @@ app.get('/api/assets/:editor', (req, res) => {
 });
 
 app.post('/api/assets/:editor', (req, res) => {
-  const filePath = ASSET_PATHS[req.params.editor];
-  if (!filePath) return res.status(400).json({ error: 'Unknown editor: ' + req.params.editor });
+  const editor = EDITORS[req.params.editor];
+  if (!editor) return res.status(400).json({ error: 'Unknown editor: ' + req.params.editor });
   try {
     const data = req.body;
-    if (!data || !Array.isArray(data.DxB)) {
-      return res.status(400).json({ error: 'Invalid payload: expected { DxB: [...] }' });
+    if (!data || !Array.isArray(data[editor.rootKey])) {
+      return res.status(400).json({ error: `Invalid payload: expected { ${editor.rootKey}: [...] }` });
     }
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 4));
+    fs.writeFileSync(editor.file, JSON.stringify(data, null, 4));
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to write assets.json: ' + err.message });
@@ -41,5 +42,5 @@ app.post('/api/assets/:editor', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Assets editor running at http://localhost:${PORT}`);
-  Object.entries(ASSET_PATHS).forEach(([k, v]) => console.log(`  ${k}: ${v}`));
+  Object.entries(EDITORS).forEach(([k, v]) => console.log(`  ${k}: ${v.file}`));
 });

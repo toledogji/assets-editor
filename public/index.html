@@ -15,6 +15,7 @@
       <div class="sidebar-section-label">Editors</div>
       <button class="editor-btn active" data-editor="dxb">DxB</button>
       <button class="editor-btn" data-editor="dxc">DxC</button>
+      <button class="editor-btn" data-editor="tita">TITA Bonds</button>
     </aside>
 
     <!-- MAIN -->
@@ -57,65 +58,129 @@
 
         <!-- ADD PAGE -->
         <section id="tab-add" class="tab-content active">
-          <div id="routing-balance" class="routing-balance"></div>
-          <form id="add-form">
-            <div class="form-grid">
-              <div class="form-group">
-                <label for="trading-group">Trading Group *</label>
-                <input type="text" id="trading-group" placeholder="e.g. AL41" required />
-              </div>
-              <div class="form-group">
-                <label for="order-routing-id">Order Routing ID *</label>
-                <select id="order-routing-id">
-                    </select>
-              </div>
-              <div class="form-group">
-                <label for="minimum-qty">Minimum Qty *</label>
-                <input type="number" id="minimum-qty" value="1" min="1" required />
-              </div>
-            </div>
 
-            <h3>Asset Symbols</h3>
-            <p class="hint">
-              SecurityIDs will be generated automatically as
-              <code>{Symbol}-0001-C-CT-{Currency}</code> (T+0) and
-              <code>{Symbol}-0002-C-CT-{Currency}</code> (T+1).
-            </p>
-            <div class="form-grid">
-              <div class="form-group">
-                <label for="symbol-usd">USD Symbol *</label>
-                <input type="text" id="symbol-usd" placeholder="e.g. AL41D" required />
-              </div>
-              <div class="form-group">
-                <label for="symbol-ext">EXT Symbol *</label>
-                <input type="text" id="symbol-ext" placeholder="e.g. AL41C" required />
-              </div>
-              <div class="form-group">
-                <label for="symbol-ars">ARS Symbol *</label>
-                <input type="text" id="symbol-ars" placeholder="e.g. AL41" required />
-              </div>
-            </div>
-
-            <div id="preview-container" class="preview hidden">
-              <h3>Preview</h3>
-              <div class="preview-grid">
-                <div>
-                  <h4>T_PLUS_0</h4>
-                  <pre id="preview-t0"></pre>
+          <!-- DxB / DxC add form -->
+          <div id="dxb-add-wrapper">
+            <div id="routing-balance" class="routing-balance"></div>
+            <form id="add-form">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="trading-group">Trading Group *</label>
+                  <input type="text" id="trading-group" placeholder="e.g. AL41" required />
                 </div>
-                <div>
-                  <h4>T_PLUS_1</h4>
-                  <pre id="preview-t1"></pre>
+                <div class="form-group">
+                  <label for="order-routing-id">Order Routing ID *</label>
+                  <select id="order-routing-id">
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="minimum-qty">Minimum Qty *</label>
+                  <input type="number" id="minimum-qty" value="1" min="1" required />
                 </div>
               </div>
-            </div>
 
-            <div class="form-actions">
-              <button type="button" id="preview-btn" class="btn btn-secondary">Preview</button>
-              <button type="submit" id="add-btn" class="btn btn-primary">Add Trading Group</button>
-            </div>
-            <div id="add-result" class="result-msg hidden"></div>
-          </form>
+              <h3>Asset Symbols</h3>
+              <p class="hint">
+                SecurityIDs will be generated automatically as
+                <code>{Symbol}-0001-C-CT-{Currency}</code> (T+0) and
+                <code>{Symbol}-0002-C-CT-{Currency}</code> (T+1).
+              </p>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="symbol-usd">USD Symbol *</label>
+                  <input type="text" id="symbol-usd" placeholder="e.g. AL41D" required />
+                </div>
+                <div class="form-group">
+                  <label for="symbol-ext">EXT Symbol *</label>
+                  <input type="text" id="symbol-ext" placeholder="e.g. AL41C" required />
+                </div>
+                <div class="form-group">
+                  <label for="symbol-ars">ARS Symbol *</label>
+                  <input type="text" id="symbol-ars" placeholder="e.g. AL41" required />
+                </div>
+              </div>
+
+              <div id="preview-container" class="preview hidden">
+                <h3>Preview</h3>
+                <div class="preview-grid">
+                  <div>
+                    <h4>T_PLUS_0</h4>
+                    <pre id="preview-t0"></pre>
+                  </div>
+                  <div>
+                    <h4>T_PLUS_1</h4>
+                    <pre id="preview-t1"></pre>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-actions">
+                <button type="button" id="preview-btn" class="btn btn-secondary">Preview</button>
+                <button type="submit" id="add-btn" class="btn btn-primary">Add Trading Group</button>
+              </div>
+              <div id="add-result" class="result-msg hidden"></div>
+            </form>
+          </div>
+
+          <!-- TITA add form -->
+          <div id="tita-add-wrapper" class="hidden">
+            <form id="tita-add-form">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="tita-trading-group">Trading Group *</label>
+                  <select id="tita-trading-group">
+                    <option value="BONOS">BONOS</option>
+                    <option value="LETRAS">LETRAS</option>
+                    <option value="ONs">ONs</option>
+                    <option value="REPO">REPO</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="tita-symbol">Symbol (Underlying) *</label>
+                  <input type="text" id="tita-symbol" placeholder="e.g. AL30" required />
+                </div>
+                <div class="form-group">
+                  <label for="tita-security-type">Security Type *</label>
+                  <select id="tita-security-type">
+                    <option value="BOND">BOND</option>
+                    <option value="NEGOTIABLE_BOND">NEGOTIABLE_BOND</option>
+                    <option value="LETRAS_DEL_TESORO">LETRAS_DEL_TESORO</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="tita-min-qty">Minimum Qty *</label>
+                  <input type="number" id="tita-min-qty" value="1" min="1" required />
+                </div>
+                <div class="form-group">
+                  <label for="tita-lot-size">Lot Size *</label>
+                  <input type="number" id="tita-lot-size" value="1" min="1" required />
+                </div>
+                <div class="form-group">
+                  <label for="tita-px-factor">PxDisplayFactor *</label>
+                  <input type="number" id="tita-px-factor" value="100" min="1" required />
+                </div>
+                <div class="form-group">
+                  <label>Currency</label>
+                  <input type="text" value="ARS" disabled />
+                </div>
+              </div>
+              <p class="hint">
+                SecurityIDs are auto-generated: <code>{Symbol}-0001-C-CT-ARS</code> (Asset T+0) and <code>{Symbol}-0002-C-CT-ARS</code> (LiquidityAsset T+1). REPO entries use <code>{Symbol}-#-U-CT-ARS</code> with no LiquidityAsset.
+              </p>
+              <div id="tita-preview-container" class="preview hidden">
+                <h3>Preview</h3>
+                <pre id="tita-preview-json"></pre>
+              </div>
+              <div class="form-actions">
+                <button type="button" id="tita-preview-btn" class="btn btn-secondary">Preview</button>
+                <button type="submit" class="btn btn-primary">Add Entry</button>
+              </div>
+              <div id="tita-add-result" class="result-msg hidden"></div>
+            </form>
+          </div>
+
         </section>
 
       </div>
