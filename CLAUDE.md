@@ -35,59 +35,75 @@ Single-file Express server (`server.js`) + vanilla JS frontend (`public/`). No f
 
 ### Layout
 
-The UI has a **left sidebar** for switching between editors and a **main content area** with three tabs per editor: Add Trading Group, Edit Entries, Delete Entries.
+Left sidebar for switching editors + main content area with three tabs: Add, Edit Entries, Delete Entries.
 
 ### Backend (`server.js`)
 
-API is editor-scoped. Add new editors here by extending `ASSET_PATHS`:
+Editor-scoped API. Each editor has a `file` path and a `rootKey`:
 
 ```js
-const ASSET_PATHS = {
-  dxb: '../algo-trading-config-prod/dbb/config/assets.json',
-  dxc: '../algo-trading-config-prod/dbc/config/assets.json',
+const EDITORS = {
+  dxb:  { file: '...dbb/config/assets.json',      rootKey: 'DxB'  },
+  dxc:  { file: '...dbc/config/assets.json',      rootKey: 'DxB'  },
+  tita: { file: '...futop-tita/assets.json',       rootKey: 'TITA' },
 };
-// GET  /api/assets/:editor
-// POST /api/assets/:editor  — expects { DxB: [...] }
+// GET  /api/assets/:editor  — returns raw JSON file
+// POST /api/assets/:editor  — validates Array.isArray(data[rootKey]), writes file
 ```
-
-Both files use `DxB` as the root JSON key regardless of editor name.
 
 ### Frontend (`public/app.js`)
 
 **State:**
-- `currentEditor` — `'dxb'` or `'dxc'`, drives all API calls and config lookups
-- `dxbData` — in-memory copy of the active editor's `DxB` array
+- `currentEditor` — active editor key, drives all API calls and config lookups
+- `entryData` — in-memory copy of the active editor's data array
 - `selectedIndices` — `Set` of checked indices for the Delete tab
 
-**Per-editor config** — add new editors here too:
+**Two editor types** — controlled by `EDITOR_CONFIG[e].type`:
+
+| type   | editors    | description |
+|--------|------------|-------------|
+| `dxb`  | DxB, DxC   | Multi-currency assets (USD/EXT/ARS), paired T+0/T+1 entries per TradingGroup, routing balance panel |
+| `tita` | TITA Bonds | Single-currency ARS, one entry per symbol, Asset + optional LiquidityAsset, no routing balance |
+
+**Full EDITOR_CONFIG:**
 ```js
 const EDITOR_CONFIG = {
-  dxb: { label: 'DxB', toleranceMs: 3000, routingIds: ['XMEV_1', 'XMEV_2', 'XMEV_3', 'XMEV_4'] },
-  dxc: { label: 'DxC', toleranceMs: 5000, routingIds: ['XMEV_1', 'XMEV_2', 'XMEV_3'] },
+  dxb:  { label: 'DxB',        type: 'dxb',  toleranceMs: 3000, routingIds: ['XMEV_1','XMEV_2','XMEV_3','XMEV_4'], rootKey: 'DxB' },
+  dxc:  { label: 'DxC',        type: 'dxb',  toleranceMs: 5000, routingIds: ['XMEV_1','XMEV_2','XMEV_3'],          rootKey: 'DxB' },
+  tita: { label: 'TITA Bonds', type: 'tita', toleranceMs: 1000, rootKey: 'TITA',
+    tradingGroups: ['BONOS', 'LETRAS', 'ONs', 'REPO'],
+    securityTypes: ['BOND', 'NEGOTIABLE_BOND', 'LETRAS_DEL_TESORO'],
+  },
 };
 ```
 
 **Key functions:**
-- `loadAssets()` — fetches `/api/assets/${currentEditor}`, then calls `renderAll()`
-- `renderAll()` — calls `renderChecklist()`, `renderEditList()`, `renderRoutingBalance()`
-- `saveAssets(newDxB, isAdd)` — POSTs to `/api/assets/${currentEditor}`, then calls `renderAll()`
-- `renderChecklist()` — Delete tab; group checkboxes with indeterminate state via `selectedIndices`
-- `renderEditList()` — Edit tab; inline expand/collapse form per entry
-- `renderRoutingBalance()` — Add tab; balance cards counting unique TradingGroups per OrderRoutingId
-- `populateRoutingDropdown()` — rebuilds the Add form's routing select from `routingIds()` for the active editor
-- `routingIds()` — returns `EDITOR_CONFIG[currentEditor].routingIds`
+- `loadAssets()` — fetches `/api/assets/${currentEditor}`, extracts `data[rootKey]` into `entryData`, calls `renderAll()`
+- `renderAll()` — branches on `type`: calls dxb or tita render functions
+- `saveAssets(newData, isAdd, isTitaAdd)` — POSTs `{ [rootKey]: newData }`, calls `renderAll()`
+- `renderChecklist()` / `renderTitaChecklist()` — Delete tab per type
+- `renderEditList()` / `renderTitaEditList()` — Edit tab per type
+- `renderRoutingBalance()` — Add tab (dxb type only); balance cards per OrderRoutingId
+- `buildNewEntries()` — builds T+0 + T+1 pair for dxb type
+- `buildTitaEntry()` — builds single TITA entry; REPO uses `#-U-CT-ARS` pattern, no LiquidityAsset
 
-**Sticky layout:** the header is `position: sticky; top: 0`. The toolbar uses `top: var(--header-h)`, set via JS after measuring `#main-header.offsetHeight`.
+**Add tab HTML:** two wrappers inside `#tab-add` — `#dxb-add-wrapper` and `#tita-add-wrapper`. Only one is visible at a time based on editor type.
+
+**Sticky layout:** header `position: sticky; top: 0`. Toolbar uses `top: var(--header-h)` set by JS from `#main-header.offsetHeight`.
 
 ### Adding a new editor
 
-1. `server.js` — add entry to `ASSET_PATHS`
-2. `app.js` — add entry to `EDITOR_CONFIG` (label, toleranceMs, routingIds)
+**Same schema as DxB/DxC:**
+1. `server.js` — add to `EDITORS` with `file` and `rootKey: 'DxB'`
+2. `app.js` — add to `EDITOR_CONFIG` with `type: 'dxb'`, `toleranceMs`, `routingIds`
 3. `index.html` — add `<button class="editor-btn" data-editor="...">` in the sidebar
 
-### JSON schema
+**New schema type:**
+1–3 above, plus add render functions (`renderXxxChecklist`, `renderXxxEditList`), an add form wrapper in HTML, and branch in `renderAll()`.
 
-Each entry in the `DxB` array:
+### JSON schemas
+
+**DxB/DxC entry** (root key `DxB`, two entries per TradingGroup — one per SettlementType):
 ```json
 {
   "MarketDataSourceId": "XMEV_1",
@@ -103,7 +119,23 @@ Each entry in the `DxB` array:
   ]
 }
 ```
+SecurityID: `{Symbol}-0001-C-CT-{Currency}` (T+0) / `0002` (T+1). `Underlying` = `TradingGroup`.
 
-SecurityID convention: `{Symbol}-{seq}-C-CT-{Currency}` — `seq` is `0001` for T_PLUS_0, `0002` for T_PLUS_1. Auto-generated in Add and Edit flows; `Underlying` is always set to `TradingGroup`.
-
-Each TradingGroup always has exactly two entries — one per SettlementType.
+**TITA entry** (root key `TITA`, one entry per symbol/Underlying):
+```json
+{
+  "TradingGroup": "BONOS",
+  "SecurityExchange": "XMEV",
+  "OrderRoutingId": "XMEV",
+  "Underlying": "AL30",
+  "Currency": "ARS",
+  "MinimumQty": 1,
+  "LotSize": 100,
+  "PxDisplayFactor": 100,
+  "ToleranceThresholdMs": 1000,
+  "Asset":         { "Symbol": "AL30", "SecurityID": "AL30-0001-C-CT-ARS", "SettlementType": "T_PLUS_0", "SecurityType": "BOND" },
+  "LiquidityAsset":{ "Symbol": "AL30", "SecurityID": "AL30-0002-C-CT-ARS", "SettlementType": "T_PLUS_1", "SecurityType": "BOND" }
+}
+```
+REPO entries: no `LiquidityAsset`, `SecurityType: "REPO"`, SecurityID uses `{Symbol}-#-U-CT-ARS`.
+TradingGroups: `BONOS`, `LETRAS`, `ONs`, `REPO`. SecurityTypes: `BOND`, `NEGOTIABLE_BOND`, `LETRAS_DEL_TESORO`.
