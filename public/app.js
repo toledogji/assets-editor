@@ -489,6 +489,18 @@ function renderTitaEditList() {
       `<option value="${tg}" ${tg === selected ? 'selected' : ''}>${tg}</option>`
     ).join('');
 
+  // Bulk tolerance bar
+  const firstTolerance = entryData.length > 0 ? entryData[0].ToleranceThresholdMs : 1000;
+  container.innerHTML = `
+    <div class="bulk-tolerance-bar">
+      <label for="bulk-tolerance">ToleranceThresholdMs — apply to all entries:</label>
+      <div class="bulk-tolerance-controls">
+        <input type="number" id="bulk-tolerance" value="${firstTolerance}" min="0" />
+        <button id="bulk-tolerance-btn" class="btn btn-secondary">Apply to All</button>
+      </div>
+    </div>
+  `;
+
   let html = '';
   for (const [tg, items] of grouped) {
     html += `
@@ -561,6 +573,10 @@ function renderTitaEditList() {
                 <label>PxDisplayFactor</label>
                 <input type="number" class="ef-tita-px" value="${entry.PxDisplayFactor}" min="1" />
               </div>
+              <div class="form-group">
+                <label>ToleranceThresholdMs</label>
+                <input type="number" class="ef-tita-tolerance" value="${entry.ToleranceThresholdMs}" min="0" />
+              </div>
             </div>
             <div class="edit-actions">
               <button class="btn btn-primary ef-tita-save" data-idx="${idx}">Save</button>
@@ -575,7 +591,15 @@ function renderTitaEditList() {
     html += `</div></div>`;
   }
 
-  container.innerHTML = html;
+  container.innerHTML += html;
+
+  // Bulk apply ToleranceThresholdMs
+  document.getElementById('bulk-tolerance-btn').addEventListener('click', async () => {
+    const val = parseInt(document.getElementById('bulk-tolerance').value, 10);
+    if (isNaN(val)) { alert('Enter a valid number.'); return; }
+    const newData = entryData.map(e => ({ ...e, ToleranceThresholdMs: val }));
+    await saveAssets(newData);
+  });
 
   // Toggle Trading Group → force REPO security type
   container.querySelectorAll('.ef-tita-tg').forEach(sel => {
@@ -613,22 +637,22 @@ function renderTitaEditList() {
       const idx = parseInt(btn.dataset.idx, 10);
       const panel = document.getElementById(`edit-panel-${idx}`);
 
-      const newTg       = panel.querySelector('.ef-tita-tg').value;
-      const newSym      = panel.querySelector('.ef-tita-sym').value.trim().toUpperCase();
-      const newSecType  = panel.querySelector('.ef-tita-sectype').value;
-      const newQty      = parseInt(panel.querySelector('.ef-tita-qty').value, 10);
-      const newLot      = parseInt(panel.querySelector('.ef-tita-lot').value, 10);
-      const newPx       = parseInt(panel.querySelector('.ef-tita-px').value, 10);
+      const newTg        = panel.querySelector('.ef-tita-tg').value;
+      const newSym       = panel.querySelector('.ef-tita-sym').value.trim().toUpperCase();
+      const newSecType   = panel.querySelector('.ef-tita-sectype').value;
+      const newQty       = parseInt(panel.querySelector('.ef-tita-qty').value, 10);
+      const newLot       = parseInt(panel.querySelector('.ef-tita-lot').value, 10);
+      const newPx        = parseInt(panel.querySelector('.ef-tita-px').value, 10);
+      const newTolerance = parseInt(panel.querySelector('.ef-tita-tolerance').value, 10);
 
-      if (!newSym || isNaN(newQty) || isNaN(newLot) || isNaN(newPx)) {
+      if (!newSym || isNaN(newQty) || isNaN(newLot) || isNaN(newPx) || isNaN(newTolerance)) {
         alert('All fields are required.');
         return;
       }
 
       const entry = entryData[idx];
       const updated = buildTitaEntry(newTg, newSym, newSecType, newQty, newLot, newPx);
-      // Preserve ToleranceThresholdMs from original
-      updated.ToleranceThresholdMs = entry.ToleranceThresholdMs;
+      updated.ToleranceThresholdMs = newTolerance;
 
       const newData = [...entryData];
       newData[idx] = updated;
