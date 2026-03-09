@@ -1,6 +1,12 @@
 // ── State ──────────────────────────────────────────────────────────────────
-let dxbData = [];          // full DxB array from server
-let selectedIndices = new Set(); // indices into dxbData that are checked
+let dxbData = [];
+let selectedIndices = new Set();
+let currentEditor = 'dxb';
+
+const EDITOR_CONFIG = {
+  dxb: { label: 'DxB', toleranceMs: 3000 },
+  dxc: { label: 'DxC', toleranceMs: 5000 },
+};
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function settlementBadge(s) {
@@ -15,7 +21,6 @@ function assetChips(assets) {
   ).join('');
 }
 
-// Group DxB array by TradingGroup, preserving within-group order
 function groupByTradingGroup(arr) {
   const map = new Map();
   arr.forEach((entry, idx) => {
@@ -23,17 +28,20 @@ function groupByTradingGroup(arr) {
     if (!map.has(tg)) map.set(tg, []);
     map.get(tg).push({ entry, idx });
   });
-  // Sort groups alphabetically
   return new Map([...map.entries()].sort((a, b) => a[0].localeCompare(b[0])));
 }
 
 // ── Load data ──────────────────────────────────────────────────────────────
 async function loadAssets() {
-  const res = await fetch('/api/assets');
+  const res = await fetch(`/api/assets/${currentEditor}`);
   if (!res.ok) throw new Error(await res.text());
   const data = await res.json();
   dxbData = data.DxB;
   selectedIndices.clear();
+  renderAll();
+}
+
+function renderAll() {
   renderChecklist();
   renderEditList();
   renderRoutingBalance();
@@ -60,12 +68,8 @@ function renderChecklist() {
       <div class="group-block">
         <div class="group-header" data-tg="${tg}">
           <div class="group-check-wrap">
-            <input type="checkbox"
-              class="group-checkbox"
-              data-tg="${tg}"
-              ${allChecked ? 'checked' : ''}
-              data-indeterminate="${indeterminate}"
-            />
+            <input type="checkbox" class="group-checkbox" data-tg="${tg}"
+              ${allChecked ? 'checked' : ''} data-indeterminate="${indeterminate}" />
           </div>
           <span class="group-title">${tg}</span>
           <span class="group-badge">${items.length} entr${items.length === 1 ? 'y' : 'ies'}</span>
@@ -74,10 +78,9 @@ function renderChecklist() {
     `;
 
     for (const { entry, idx } of items) {
-      const checked = selectedIndices.has(idx);
       html += `
         <div class="entry-row">
-          <input type="checkbox" class="entry-checkbox" data-idx="${idx}" ${checked ? 'checked' : ''} />
+          <input type="checkbox" class="entry-checkbox" data-idx="${idx}" ${selectedIndices.has(idx) ? 'checked' : ''} />
           <div class="entry-info">
             ${settlementBadge(entry.SettlementType)}
             <div class="entry-meta">
@@ -96,12 +99,10 @@ function renderChecklist() {
 
   container.innerHTML = html;
 
-  // Fix indeterminate state (can't set via HTML attribute)
   container.querySelectorAll('.group-checkbox').forEach(cb => {
     if (cb.dataset.indeterminate === 'true') cb.indeterminate = true;
   });
 
-  // Entry checkbox events
   container.querySelectorAll('.entry-checkbox').forEach(cb => {
     cb.addEventListener('change', () => {
       const idx = parseInt(cb.dataset.idx, 10);
@@ -111,22 +112,18 @@ function renderChecklist() {
     });
   });
 
-  // Group checkbox events
   container.querySelectorAll('.group-checkbox').forEach(cb => {
     cb.addEventListener('change', e => {
       e.stopPropagation();
       const tg = cb.dataset.tg;
-      const grouped2 = groupByTradingGroup(dxbData);
-      const items = grouped2.get(tg) || [];
-      items.forEach(({ idx }) => {
+      (groupByTradingGroup(dxbData).get(tg) || []).forEach(({ idx }) => {
         cb.checked ? selectedIndices.add(idx) : selectedIndices.delete(idx);
       });
       updateToolbar();
-      renderChecklist(); // full re-render to sync all checkboxes
+      renderChecklist();
     });
   });
 
-  // Header click toggles group checkbox
   container.querySelectorAll('.group-header').forEach(header => {
     header.addEventListener('click', e => {
       if (e.target.type === 'checkbox') return;
@@ -141,12 +138,10 @@ function renderChecklist() {
 
 function rerenderGroupHeader(groupBlock) {
   const tg = groupBlock.querySelector('.group-checkbox').dataset.tg;
-  const grouped = groupByTradingGroup(dxbData);
-  const items = grouped.get(tg) || [];
+  const items = groupByTradingGroup(dxbData).get(tg) || [];
   const allIdxs = items.map(i => i.idx);
   const allChecked = allIdxs.every(i => selectedIndices.has(i));
   const someChecked = allIdxs.some(i => selectedIndices.has(i));
-
   const cb = groupBlock.querySelector('.group-checkbox');
   cb.checked = allChecked;
   cb.indeterminate = someChecked && !allChecked;
@@ -159,7 +154,7 @@ function updateToolbar() {
   document.getElementById('delete-btn').disabled = n === 0;
 }
 
-// ── Select/Deselect all ────────────────────────────────────────────────────
+// ── Select / Deselect all ──────────────────────────────────────────────────
 document.getElementById('select-all-btn').addEventListener('click', () => {
   dxbData.forEach((_, i) => selectedIndices.add(i));
   renderChecklist();
@@ -187,8 +182,7 @@ document.getElementById('modal-cancel').addEventListener('click', () => {
 
 document.getElementById('modal-confirm').addEventListener('click', async () => {
   document.getElementById('modal-overlay').classList.add('hidden');
-  const newDxB = dxbData.filter((_, i) => !selectedIndices.has(i));
-  await saveAssets(newDxB);
+  await saveAssets(dxbData.filter((_, i) => !selectedIndices.has(i)));
 });
 
 // ── Edit page ──────────────────────────────────────────────────────────────
@@ -290,37 +284,32 @@ function renderEditList() {
 
   container.innerHTML = html;
 
-  // Toggle edit panel
   container.querySelectorAll('.btn-edit').forEach(btn => {
     btn.addEventListener('click', () => {
       const idx = btn.dataset.idx;
       const panel = document.getElementById(`edit-panel-${idx}`);
       const isOpen = !panel.classList.contains('hidden');
-      // Close all others
       container.querySelectorAll('.edit-form-panel').forEach(p => p.classList.add('hidden'));
-      container.querySelectorAll('.btn-edit').forEach(b => b.classList.remove('active'));
+      container.querySelectorAll('.btn-edit').forEach(b => { b.classList.remove('active'); b.textContent = 'Edit'; });
       if (!isOpen) {
         panel.classList.remove('hidden');
         btn.classList.add('active');
         btn.textContent = 'Close';
-      } else {
-        btn.textContent = 'Edit';
       }
     });
   });
 
-  // Save per entry
   container.querySelectorAll('.ef-save').forEach(btn => {
     btn.addEventListener('click', async () => {
       const idx = parseInt(btn.dataset.idx, 10);
       const panel = document.getElementById(`edit-panel-${idx}`);
 
-      const newTg   = panel.querySelector('.ef-tg').value.trim().toUpperCase();
-      const newRid  = panel.querySelector('.ef-rid').value;
-      const newQty  = parseInt(panel.querySelector('.ef-qty').value, 10);
-      const newUsd  = panel.querySelector('.ef-usd').value.trim().toUpperCase();
-      const newExt  = panel.querySelector('.ef-ext').value.trim().toUpperCase();
-      const newArs  = panel.querySelector('.ef-ars').value.trim().toUpperCase();
+      const newTg  = panel.querySelector('.ef-tg').value.trim().toUpperCase();
+      const newRid = panel.querySelector('.ef-rid').value;
+      const newQty = parseInt(panel.querySelector('.ef-qty').value, 10);
+      const newUsd = panel.querySelector('.ef-usd').value.trim().toUpperCase();
+      const newExt = panel.querySelector('.ef-ext').value.trim().toUpperCase();
+      const newArs = panel.querySelector('.ef-ars').value.trim().toUpperCase();
 
       if (!newTg || !newUsd || !newExt || !newArs || isNaN(newQty)) {
         alert('All fields are required.');
@@ -329,16 +318,15 @@ function renderEditList() {
 
       const entry = dxbData[idx];
       const seq = SEQ[entry.SettlementType];
-
       const updated = {
         ...entry,
         TradingGroup: newTg,
         OrderRoutingId: newRid,
         MinimumQty: newQty,
         Assets: [
-          { Symbol: newUsd, SecurityID: `${newUsd}-${seq}-C-CT-USD`, SecurityType: 'BOND', Currency: 'USD', Underlying: newTg, SettlementType: entry.SettlementType },
-          { Symbol: newExt, SecurityID: `${newExt}-${seq}-C-CT-EXT`, SecurityType: 'BOND', Currency: 'EXT', Underlying: newTg, SettlementType: entry.SettlementType },
-          { Symbol: newArs, SecurityID: `${newArs}-${seq}-C-CT-ARS`, SecurityType: 'BOND', Currency: 'ARS', Underlying: newTg, SettlementType: entry.SettlementType },
+          { Symbol: newUsd, SecurityID: `${newUsd}-${seq}-C-CT-USD`, SecurityType: entry.Assets[0]?.SecurityType || 'BOND', Currency: 'USD', Underlying: newTg, SettlementType: entry.SettlementType },
+          { Symbol: newExt, SecurityID: `${newExt}-${seq}-C-CT-EXT`, SecurityType: entry.Assets[1]?.SecurityType || 'BOND', Currency: 'EXT', Underlying: newTg, SettlementType: entry.SettlementType },
+          { Symbol: newArs, SecurityID: `${newArs}-${seq}-C-CT-ARS`, SecurityType: entry.Assets[2]?.SecurityType || 'BOND', Currency: 'ARS', Underlying: newTg, SettlementType: entry.SettlementType },
         ],
       };
 
@@ -346,21 +334,15 @@ function renderEditList() {
       newDxB[idx] = updated;
       await saveAssets(newDxB);
 
-      // Flash "Saved!" without full re-render to keep panel open
       const msg = document.getElementById(`edit-saved-${idx}`);
-      if (msg) {
-        msg.classList.add('visible');
-        setTimeout(() => msg.classList.remove('visible'), 2000);
-      }
+      if (msg) { msg.classList.add('visible'); setTimeout(() => msg.classList.remove('visible'), 2000); }
     });
   });
 
-  // Cancel
   container.querySelectorAll('.ef-cancel').forEach(btn => {
     btn.addEventListener('click', () => {
       const idx = btn.dataset.idx;
-      const panel = document.getElementById(`edit-panel-${idx}`);
-      panel.classList.add('hidden');
+      document.getElementById(`edit-panel-${idx}`).classList.add('hidden');
       const editBtn = container.querySelector(`.btn-edit[data-idx="${idx}"]`);
       if (editBtn) { editBtn.classList.remove('active'); editBtn.textContent = 'Edit'; }
     });
@@ -369,25 +351,21 @@ function renderEditList() {
 
 // ── Routing balance ────────────────────────────────────────────────────────
 function renderRoutingBalance() {
-  const ids = ['XMEV_1', 'XMEV_2', 'XMEV_3', 'XMEV_4'];
-
-  // Count unique TradingGroups per OrderRoutingId
   const counts = {};
-  ids.forEach(id => counts[id] = 0);
+  ROUTING_IDS.forEach(id => counts[id] = 0);
   const seen = {};
   dxbData.forEach(entry => {
     const key = entry.OrderRoutingId + '|' + entry.TradingGroup;
-    if (!seen[key]) {
+    if (!seen[key] && counts[entry.OrderRoutingId] !== undefined) {
       seen[key] = true;
-      if (counts[entry.OrderRoutingId] !== undefined) counts[entry.OrderRoutingId]++;
+      counts[entry.OrderRoutingId]++;
     }
   });
 
-  const max = Math.max(...ids.map(id => counts[id]), 1);
-  const minCount = Math.min(...ids.map(id => counts[id]));
+  const max = Math.max(...ROUTING_IDS.map(id => counts[id]), 1);
+  const minCount = Math.min(...ROUTING_IDS.map(id => counts[id]));
 
-  const container = document.getElementById('routing-balance');
-  container.innerHTML = ids.map(id => {
+  document.getElementById('routing-balance').innerHTML = ROUTING_IDS.map(id => {
     const n = counts[id];
     const pct = Math.round((n / max) * 100);
     const isFewest = n === minCount;
@@ -407,41 +385,20 @@ function renderRoutingBalance() {
 
 // ── Add form ───────────────────────────────────────────────────────────────
 function buildNewEntries(tg, orderRoutingId, minQty, usdSym, extSym, arsSym) {
+  const { toleranceMs } = EDITOR_CONFIG[currentEditor];
   const makeEntry = (settlement, seqCode) => ({
     MarketDataSourceId: 'XMEV_1',
     OrderRoutingId: orderRoutingId,
     TradingGroup: tg,
     SettlementType: settlement,
     MinimumQty: Number(minQty),
-    ToleranceThresholdMs: 3000,
+    ToleranceThresholdMs: toleranceMs,
     Assets: [
-      {
-        Symbol: usdSym,
-        SecurityID: `${usdSym}-${seqCode}-C-CT-USD`,
-        SecurityType: 'BOND',
-        Currency: 'USD',
-        Underlying: tg,
-        SettlementType: settlement,
-      },
-      {
-        Symbol: extSym,
-        SecurityID: `${extSym}-${seqCode}-C-CT-EXT`,
-        SecurityType: 'BOND',
-        Currency: 'EXT',
-        Underlying: tg,
-        SettlementType: settlement,
-      },
-      {
-        Symbol: arsSym,
-        SecurityID: `${arsSym}-${seqCode}-C-CT-ARS`,
-        SecurityType: 'BOND',
-        Currency: 'ARS',
-        Underlying: tg,
-        SettlementType: settlement,
-      },
+      { Symbol: usdSym, SecurityID: `${usdSym}-${seqCode}-C-CT-USD`, SecurityType: 'BOND', Currency: 'USD', Underlying: tg, SettlementType: settlement },
+      { Symbol: extSym, SecurityID: `${extSym}-${seqCode}-C-CT-EXT`, SecurityType: 'BOND', Currency: 'EXT', Underlying: tg, SettlementType: settlement },
+      { Symbol: arsSym, SecurityID: `${arsSym}-${seqCode}-C-CT-ARS`, SecurityType: 'BOND', Currency: 'ARS', Underlying: tg, SettlementType: settlement },
     ],
   });
-
   return [makeEntry('T_PLUS_0', '0001'), makeEntry('T_PLUS_1', '0002')];
 }
 
@@ -458,10 +415,7 @@ function getFormValues() {
 
 document.getElementById('preview-btn').addEventListener('click', () => {
   const { tg, orderRoutingId, minQty, usdSym, extSym, arsSym } = getFormValues();
-  if (!tg || !usdSym || !extSym || !arsSym) {
-    showResult('Please fill in all fields before previewing.', 'error');
-    return;
-  }
+  if (!tg || !usdSym || !extSym || !arsSym) { showResult('Please fill in all fields before previewing.', 'error'); return; }
   const [e0, e1] = buildNewEntries(tg, orderRoutingId, minQty, usdSym, extSym, arsSym);
   document.getElementById('preview-t0').textContent = JSON.stringify(e0, null, 2);
   document.getElementById('preview-t1').textContent = JSON.stringify(e1, null, 2);
@@ -472,49 +426,34 @@ document.getElementById('preview-btn').addEventListener('click', () => {
 document.getElementById('add-form').addEventListener('submit', async e => {
   e.preventDefault();
   const { tg, orderRoutingId, minQty, usdSym, extSym, arsSym } = getFormValues();
-
-  // Check for duplicate TradingGroup
-  const existing = dxbData.some(d => d.TradingGroup === tg);
-  if (existing) {
+  if (dxbData.some(d => d.TradingGroup === tg)) {
     showResult(`Trading Group "${tg}" already exists in assets.json.`, 'error');
     return;
   }
-
   const [e0, e1] = buildNewEntries(tg, orderRoutingId, minQty, usdSym, extSym, arsSym);
-  const newDxB = [...dxbData, e0, e1];
-  await saveAssets(newDxB, true);
+  await saveAssets([...dxbData, e0, e1], true);
 });
 
 // ── Save ───────────────────────────────────────────────────────────────────
 async function saveAssets(newDxB, isAdd = false) {
   try {
-    const res = await fetch('/api/assets', {
+    const res = await fetch(`/api/assets/${currentEditor}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ DxB: newDxB }),
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Unknown error');
-    }
+    if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Unknown error'); }
     dxbData = newDxB;
     selectedIndices.clear();
-
-    renderChecklist();
-    renderEditList();
-    renderRoutingBalance();
+    renderAll();
     if (isAdd) {
       showResult('Trading Group added successfully!', 'success');
       document.getElementById('add-form').reset();
       document.getElementById('preview-container').classList.add('hidden');
     }
   } catch (err) {
-    if (isAdd) {
-      showResult('Error: ' + err.message, 'error');
-    } else {
-      alert('Error saving: ' + err.message);
-      renderChecklist();
-    }
+    if (isAdd) { showResult('Error: ' + err.message, 'error'); }
+    else { alert('Error saving: ' + err.message); renderAll(); }
   }
 }
 
@@ -524,16 +463,6 @@ function showResult(msg, type) {
   el.className = `result-msg ${type}`;
   el.classList.remove('hidden');
 }
-
-// ── Tabs ───────────────────────────────────────────────────────────────────
-document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(s => s.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
-  });
-});
 
 // ── Export ─────────────────────────────────────────────────────────────────
 document.getElementById('export-btn').addEventListener('click', () => {
@@ -547,7 +476,56 @@ document.getElementById('export-btn').addEventListener('click', () => {
   URL.revokeObjectURL(url);
 });
 
+// ── Tabs ───────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(s => s.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ── Editor switching ───────────────────────────────────────────────────────
+document.querySelectorAll('.editor-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    if (btn.dataset.editor === currentEditor) return;
+    currentEditor = btn.dataset.editor;
+    document.querySelectorAll('.editor-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('editor-title').textContent = EDITOR_CONFIG[currentEditor].label;
+
+    // Reset to Add tab
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(s => s.classList.remove('active'));
+    document.querySelector('.tab-btn[data-tab="add"]').classList.add('active');
+    document.getElementById('tab-add').classList.add('active');
+
+    // Clear add form
+    document.getElementById('add-form').reset();
+    document.getElementById('preview-container').classList.add('hidden');
+    document.getElementById('add-result').classList.add('hidden');
+
+    document.getElementById('checklist-container').innerHTML = '<p class="loading">Loading...</p>';
+    document.getElementById('edit-list-container').innerHTML = '<p class="loading">Loading...</p>';
+
+    await loadAssets().catch(err => {
+      document.getElementById('checklist-container').innerHTML =
+        `<p class="loading" style="color:#f87171">Failed to load: ${err.message}</p>`;
+    });
+  });
+});
+
+// ── Sticky header offset ───────────────────────────────────────────────────
+function updateHeaderOffset() {
+  const h = document.getElementById('main-header').offsetHeight;
+  document.documentElement.style.setProperty('--header-h', h + 'px');
+}
+
 // ── Init ───────────────────────────────────────────────────────────────────
+updateHeaderOffset();
+window.addEventListener('resize', updateHeaderOffset);
+
 loadAssets().catch(err => {
   document.getElementById('checklist-container').innerHTML =
     `<p class="loading" style="color:#f87171">Failed to load: ${err.message}</p>`;
