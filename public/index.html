@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DxB Assets Editor</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div class="header-top">
+        <h1>DxB Assets Editor</h1>
+        <button id="export-btn" class="btn btn-secondary">&#8659; Export JSON</button>
+      </div>
+      <nav>
+        <button class="tab-btn active" data-tab="add">Add Trading Group</button>
+        <button class="tab-btn" data-tab="edit">Edit Entries</button>
+        <button class="tab-btn" data-tab="delete">Delete Entries</button>
+      </nav>
+    </header>
+
+    <!-- DELETE PAGE -->
+    <section id="tab-delete" class="tab-content">
+      <div class="toolbar">
+        <span id="selected-count">0 entries selected</span>
+        <div class="toolbar-actions">
+          <button id="select-all-btn" class="btn btn-secondary">Select All</button>
+          <button id="deselect-all-btn" class="btn btn-secondary">Deselect All</button>
+          <button id="delete-btn" class="btn btn-danger" disabled>Delete Selected</button>
+        </div>
+      </div>
+      <div id="checklist-container">
+        <p class="loading">Loading...</p>
+      </div>
+    </section>
+
+    <!-- EDIT PAGE -->
+    <section id="tab-edit" class="tab-content">
+      <div id="edit-list-container">
+        <p class="loading">Loading...</p>
+      </div>
+    </section>
+
+    <!-- ADD PAGE -->
+    <section id="tab-add" class="tab-content active">
+      <div id="routing-balance" class="routing-balance"></div>
+      <form id="add-form">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="trading-group">Trading Group *</label>
+            <input type="text" id="trading-group" placeholder="e.g. AL41" required />
+          </div>
+          <div class="form-group">
+            <label for="order-routing-id">Order Routing ID *</label>
+            <select id="order-routing-id">
+              <option value="XMEV_1">XMEV_1</option>
+              <option value="XMEV_2">XMEV_2</option>
+              <option value="XMEV_3">XMEV_3</option>
+              <option value="XMEV_4">XMEV_4</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="minimum-qty">Minimum Qty *</label>
+            <input type="number" id="minimum-qty" value="1" min="1" required />
+          </div>
+        </div>
+
+        <h3>Asset Symbols</h3>
+        <p class="hint">
+          SecurityIDs will be generated automatically as
+          <code>{Symbol}-0001-C-CT-{Currency}</code> (T+0) and
+          <code>{Symbol}-0002-C-CT-{Currency}</code> (T+1).
+        </p>
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="symbol-usd">USD Symbol *</label>
+            <input type="text" id="symbol-usd" placeholder="e.g. AL41D" required />
+          </div>
+          <div class="form-group">
+            <label for="symbol-ext">EXT Symbol *</label>
+            <input type="text" id="symbol-ext" placeholder="e.g. AL41C" required />
+          </div>
+          <div class="form-group">
+            <label for="symbol-ars">ARS Symbol *</label>
+            <input type="text" id="symbol-ars" placeholder="e.g. AL41" required />
+          </div>
+        </div>
+
+        <div id="preview-container" class="preview hidden">
+          <h3>Preview</h3>
+          <div class="preview-grid">
+            <div>
+              <h4>T_PLUS_0</h4>
+              <pre id="preview-t0"></pre>
+            </div>
+            <div>
+              <h4>T_PLUS_1</h4>
+              <pre id="preview-t1"></pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" id="preview-btn" class="btn btn-secondary">Preview</button>
+          <button type="submit" id="add-btn" class="btn btn-primary">Add Trading Group</button>
+        </div>
+        <div id="add-result" class="result-msg hidden"></div>
+      </form>
+    </section>
+  </div>
+
+  <!-- Confirm Dialog -->
+  <div id="modal-overlay" class="hidden">
+    <div id="modal">
+      <h2>Confirm Deletion</h2>
+      <p id="modal-msg"></p>
+      <div class="modal-actions">
+        <button id="modal-cancel" class="btn btn-secondary">Cancel</button>
+        <button id="modal-confirm" class="btn btn-danger">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

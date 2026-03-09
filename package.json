@@ -1,0 +1,12 @@
+{
+  "name": "assets-editor",
+  "version": "1.0.0",
+  "description": "DxB Assets JSON editor",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
