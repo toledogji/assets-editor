@@ -4,8 +4,8 @@ let selectedIndices = new Set();
 let currentEditor = 'dxb';
 
 const EDITOR_CONFIG = {
-  dxb: { label: 'DxB', toleranceMs: 3000 },
-  dxc: { label: 'DxC', toleranceMs: 5000 },
+  dxb: { label: 'DxB', toleranceMs: 3000, routingIds: ['XMEV_1', 'XMEV_2', 'XMEV_3', 'XMEV_4'] },
+  dxc: { label: 'DxC', toleranceMs: 5000, routingIds: ['XMEV_1', 'XMEV_2', 'XMEV_3'] },
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -186,7 +186,7 @@ document.getElementById('modal-confirm').addEventListener('click', async () => {
 });
 
 // ── Edit page ──────────────────────────────────────────────────────────────
-const ROUTING_IDS = ['XMEV_1', 'XMEV_2', 'XMEV_3', 'XMEV_4'];
+const routingIds = () => EDITOR_CONFIG[currentEditor].routingIds;
 const SEQ = { T_PLUS_0: '0001', T_PLUS_1: '0002' };
 
 function getSymbolByCurrency(assets, currency) {
@@ -194,7 +194,7 @@ function getSymbolByCurrency(assets, currency) {
 }
 
 function routingOptions(selected) {
-  return ROUTING_IDS.map(id =>
+  return routingIds().map(id =>
     `<option value="${id}" ${id === selected ? 'selected' : ''}>${id}</option>`
   ).join('');
 }
@@ -352,7 +352,7 @@ function renderEditList() {
 // ── Routing balance ────────────────────────────────────────────────────────
 function renderRoutingBalance() {
   const counts = {};
-  ROUTING_IDS.forEach(id => counts[id] = 0);
+  routingIds().forEach(id => counts[id] = 0);
   const seen = {};
   dxbData.forEach(entry => {
     const key = entry.OrderRoutingId + '|' + entry.TradingGroup;
@@ -362,10 +362,10 @@ function renderRoutingBalance() {
     }
   });
 
-  const max = Math.max(...ROUTING_IDS.map(id => counts[id]), 1);
-  const minCount = Math.min(...ROUTING_IDS.map(id => counts[id]));
+  const max = Math.max(...routingIds().map(id => counts[id]), 1);
+  const minCount = Math.min(...routingIds().map(id => counts[id]));
 
-  document.getElementById('routing-balance').innerHTML = ROUTING_IDS.map(id => {
+  document.getElementById('routing-balance').innerHTML = routingIds().map(id => {
     const n = counts[id];
     const pct = Math.round((n / max) * 100);
     const isFewest = n === minCount;
@@ -502,6 +502,7 @@ document.querySelectorAll('.editor-btn').forEach(btn => {
     document.getElementById('tab-add').classList.add('active');
 
     // Clear add form
+    populateRoutingDropdown();
     document.getElementById('add-form').reset();
     document.getElementById('preview-container').classList.add('hidden');
     document.getElementById('add-result').classList.add('hidden');
@@ -516,6 +517,12 @@ document.querySelectorAll('.editor-btn').forEach(btn => {
   });
 });
 
+// ── Populate routing dropdown ──────────────────────────────────────────────
+function populateRoutingDropdown() {
+  const select = document.getElementById('order-routing-id');
+  select.innerHTML = routingIds().map(id => `<option value="${id}">${id}</option>`).join('');
+}
+
 // ── Sticky header offset ───────────────────────────────────────────────────
 function updateHeaderOffset() {
   const h = document.getElementById('main-header').offsetHeight;
@@ -524,6 +531,7 @@ function updateHeaderOffset() {
 
 // ── Init ───────────────────────────────────────────────────────────────────
 updateHeaderOffset();
+populateRoutingDropdown();
 window.addEventListener('resize', updateHeaderOffset);
 
 loadAssets().catch(err => {
