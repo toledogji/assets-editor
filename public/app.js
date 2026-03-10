@@ -4,13 +4,14 @@ let selectedIndices = new Set();
 let currentEditor = 'dxb';
 
 const EDITOR_CONFIG = {
-  dxb:  { label: 'DxB',        type: 'dxb',  toleranceMs: 3000, routingIds: ['XMEV_1','XMEV_2','XMEV_3','XMEV_4'], rootKey: 'DxB' },
-  dxc:  { label: 'DxC',        type: 'dxb',  toleranceMs: 5000, routingIds: ['XMEV_1','XMEV_2','XMEV_3'],          rootKey: 'DxB' },
-  tita: { label: 'TITA Bonds', type: 'tita', toleranceMs: 1000, rootKey: 'TITA',
+  dxb:   { label: 'DxB',        type: 'dxb',   toleranceMs: 3000, routingIds: ['XMEV_1','XMEV_2','XMEV_3','XMEV_4'], rootKey: 'DxB'   },
+  dxc:   { label: 'DxC',        type: 'dxb',   toleranceMs: 5000, routingIds: ['XMEV_1','XMEV_2','XMEV_3'],           rootKey: 'DxB'   },
+  tita:  { label: 'TITA Bonds', type: 'tita',  toleranceMs: 1000, rootKey: 'TITA',
     routingIds: ['XMEV', 'XMEV_2'],
     tradingGroups: ['BONOS', 'LETRAS', 'ONs', 'REPO'],
     securityTypes: ['BOND', 'NEGOTIABLE_BOND', 'LETRAS_DEL_TESORO'],
   },
+  canje: { label: 'Canje',      type: 'canje', toleranceMs: 3000, routingIds: ['XMEV_1','XMEV_2','XMEV_3','XMEV_4'], rootKey: 'CANJE' },
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -61,6 +62,10 @@ function renderAll() {
   if (type === 'tita') {
     renderTitaChecklist();
     renderTitaEditList();
+    renderRoutingBalance();
+  } else if (type === 'canje') {
+    renderCanjeChecklist();
+    renderCanjeEditList();
     renderRoutingBalance();
   } else {
     renderChecklist();
@@ -739,14 +744,16 @@ function renderTitaEditList() {
 // ── Routing balance ────────────────────────────────────────────────────────
 function renderRoutingBalance() {
   const { type } = EDITOR_CONFIG[currentEditor];
-  const elId = type === 'tita' ? 'tita-routing-balance' : 'routing-balance';
+  const elId = type === 'tita' ? 'tita-routing-balance'
+    : type === 'canje' ? 'canje-routing-balance'
+    : 'routing-balance';
   const el = document.getElementById(elId);
   if (!el) return;
 
   const counts = {};
   routingIds().forEach(id => counts[id] = 0);
 
-  if (type === 'tita') {
+  if (type === 'tita' || type === 'canje') {
     // Count total entries per OrderRoutingId
     entryData.forEach(entry => {
       if (counts[entry.OrderRoutingId] !== undefined) counts[entry.OrderRoutingId]++;
@@ -879,6 +886,358 @@ document.getElementById('add-form').addEventListener('submit', async e => {
   await saveAssets([...entryData, e0, e1], true);
 });
 
+// ── Canje build entry ──────────────────────────────────────────────────────
+function buildCanjeEntry(mdsId, routingId, tg, minQty, tolerance, usdSym, extSym) {
+  return {
+    MarketDataSourceId: mdsId,
+    OrderRoutingId: routingId,
+    TradingGroup: tg,
+    MinimumQty: Number(minQty),
+    ToleranceThresholdMs: Number(tolerance),
+    LiquidityAsset: {
+      NormalTradingHours: `${usdSym}-0002-C-CT-USD`,
+      T1TradingHours: `${usdSym}-0002-C-CT-USD`,
+    },
+    Assets: [
+      { Symbol: usdSym, SecurityID: `${usdSym}-0001-C-CT-USD`, Currency: 'USD', SettlementType: 'T_PLUS_0', SecurityType: 'BOND' },
+      { Symbol: usdSym, SecurityID: `${usdSym}-0002-C-CT-USD`, Currency: 'USD', SettlementType: 'T_PLUS_1', SecurityType: 'BOND' },
+      { Symbol: extSym, SecurityID: `${extSym}-0001-C-CT-EXT`, Currency: 'EXT', SettlementType: 'T_PLUS_0', SecurityType: 'BOND' },
+      { Symbol: extSym, SecurityID: `${extSym}-0002-C-CT-EXT`, Currency: 'EXT', SettlementType: 'T_PLUS_1', SecurityType: 'BOND' },
+    ],
+  };
+}
+
+// ── Canje Checklist render ─────────────────────────────────────────────────
+function renderCanjeChecklist() {
+  const container = document.getElementById('checklist-container');
+  if (entryData.length === 0) {
+    container.innerHTML = '<p class="loading">No entries found.</p>';
+    return;
+  }
+
+  // Group by OrderRoutingId
+  const grouped = new Map();
+  entryData.forEach((entry, idx) => {
+    const key = entry.OrderRoutingId;
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push({ entry, idx });
+  });
+  const sortedKeys = [...grouped.keys()].sort();
+
+  let html = '';
+  for (const key of sortedKeys) {
+    const items = grouped.get(key);
+    const allIdxs = items.map(i => i.idx);
+    const allChecked = allIdxs.every(i => selectedIndices.has(i));
+    const someChecked = allIdxs.some(i => selectedIndices.has(i));
+    const indeterminate = someChecked && !allChecked;
+
+    html += `
+      <div class="group-block">
+        <div class="group-header" data-key="${key}">
+          <div class="group-check-wrap">
+            <input type="checkbox" class="group-checkbox" data-key="${key}"
+              ${allChecked ? 'checked' : ''} data-indeterminate="${indeterminate}" />
+          </div>
+          <span class="group-title">${key}</span>
+          <span class="group-badge">${items.length} entr${items.length === 1 ? 'y' : 'ies'}</span>
+        </div>
+        <div class="group-entries">
+    `;
+
+    for (const { entry, idx } of items) {
+      const usdSym = entry.Assets.find(a => a.Currency === 'USD')?.Symbol || '';
+      const extSym = entry.Assets.find(a => a.Currency === 'EXT')?.Symbol || '';
+      html += `
+        <div class="entry-row">
+          <input type="checkbox" class="entry-checkbox" data-idx="${idx}" ${selectedIndices.has(idx) ? 'checked' : ''} />
+          <div class="entry-info">
+            <div class="entry-meta">
+              <strong>${entry.TradingGroup}</strong> &nbsp;|&nbsp;
+              <strong>MDS:</strong> ${entry.MarketDataSourceId} &nbsp;|&nbsp;
+              <strong>MinQty:</strong> ${entry.MinimumQty} &nbsp;|&nbsp;
+              <strong>ToleranceMs:</strong> ${entry.ToleranceThresholdMs}
+            </div>
+            <div class="entry-assets">
+              <span class="asset-chip">${usdSym}<span class="currency">USD</span></span>
+              <span class="asset-chip">${extSym}<span class="currency">EXT</span></span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    html += `</div></div>`;
+  }
+
+  container.innerHTML = html;
+
+  container.querySelectorAll('.group-checkbox').forEach(cb => {
+    if (cb.dataset.indeterminate === 'true') cb.indeterminate = true;
+  });
+
+  container.querySelectorAll('.entry-checkbox').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const idx = parseInt(cb.dataset.idx, 10);
+      cb.checked ? selectedIndices.add(idx) : selectedIndices.delete(idx);
+      updateToolbar();
+      rerenderCanjeGroupHeader(cb.closest('.group-block'));
+    });
+  });
+
+  container.querySelectorAll('.group-checkbox').forEach(cb => {
+    cb.addEventListener('change', e => {
+      e.stopPropagation();
+      const key = cb.dataset.key;
+      (grouped.get(key) || []).forEach(({ idx }) => {
+        cb.checked ? selectedIndices.add(idx) : selectedIndices.delete(idx);
+      });
+      updateToolbar();
+      renderCanjeChecklist();
+    });
+  });
+
+  container.querySelectorAll('.group-header').forEach(header => {
+    header.addEventListener('click', e => {
+      if (e.target.type === 'checkbox') return;
+      const cb = header.querySelector('.group-checkbox');
+      cb.checked = !cb.checked;
+      cb.dispatchEvent(new Event('change'));
+    });
+  });
+
+  updateToolbar();
+}
+
+function rerenderCanjeGroupHeader(groupBlock) {
+  const key = groupBlock.querySelector('.group-checkbox').dataset.key;
+  const idxs = entryData.reduce((acc, entry, idx) => {
+    if (entry.OrderRoutingId === key) acc.push(idx);
+    return acc;
+  }, []);
+  const cb = groupBlock.querySelector('.group-checkbox');
+  cb.checked = idxs.every(i => selectedIndices.has(i));
+  cb.indeterminate = idxs.some(i => selectedIndices.has(i)) && !cb.checked;
+}
+
+// ── Canje Edit list ────────────────────────────────────────────────────────
+function renderCanjeEditList() {
+  const container = document.getElementById('edit-list-container');
+  if (entryData.length === 0) {
+    container.innerHTML = '<p class="loading">No entries found.</p>';
+    return;
+  }
+
+  const canjeOpts = (selected) =>
+    EDITOR_CONFIG.canje.routingIds.map(id =>
+      `<option value="${id}" ${id === selected ? 'selected' : ''}>${id}</option>`
+    ).join('');
+
+  const firstTolerance = entryData.length > 0 ? entryData[0].ToleranceThresholdMs : 3000;
+  container.innerHTML = `
+    <div class="bulk-tolerance-bar">
+      <label for="bulk-tolerance">ToleranceThresholdMs — apply to all entries:</label>
+      <div class="bulk-tolerance-controls">
+        <input type="number" id="bulk-tolerance" value="${firstTolerance}" min="0" />
+        <button id="bulk-tolerance-btn" class="btn btn-secondary">Apply to All</button>
+      </div>
+    </div>
+  `;
+
+  // Sort alphabetically by TradingGroup, group by OrderRoutingId for display
+  const grouped = new Map();
+  entryData.forEach((entry, idx) => {
+    const key = entry.OrderRoutingId;
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push({ entry, idx });
+  });
+  const sortedKeys = [...grouped.keys()].sort();
+
+  let html = '';
+  for (const key of sortedKeys) {
+    const items = grouped.get(key).sort((a, b) => a.entry.TradingGroup.localeCompare(b.entry.TradingGroup));
+    html += `
+      <div class="group-block">
+        <div class="group-header" style="cursor:default">
+          <span class="group-title">${key}</span>
+          <span class="group-badge">${items.length} entr${items.length === 1 ? 'y' : 'ies'}</span>
+        </div>
+        <div class="group-entries">
+    `;
+
+    for (const { entry, idx } of items) {
+      const usdSym = entry.Assets.find(a => a.Currency === 'USD')?.Symbol || '';
+      const extSym = entry.Assets.find(a => a.Currency === 'EXT')?.Symbol || '';
+
+      html += `
+        <div class="entry-row-wrap" data-idx="${idx}">
+          <div class="entry-row">
+            <div class="entry-info">
+              <div class="entry-meta">
+                <strong>${entry.TradingGroup}</strong> &nbsp;|&nbsp;
+                <strong>MDS:</strong> ${entry.MarketDataSourceId} &nbsp;|&nbsp;
+                <strong>MinQty:</strong> ${entry.MinimumQty} &nbsp;|&nbsp;
+                <strong>ToleranceMs:</strong> ${entry.ToleranceThresholdMs}
+              </div>
+              <div class="entry-assets">
+                <span class="asset-chip">${usdSym}<span class="currency">USD</span></span>
+                <span class="asset-chip">${extSym}<span class="currency">EXT</span></span>
+              </div>
+            </div>
+            <div class="entry-actions">
+              <button class="btn-edit" data-idx="${idx}">Edit</button>
+            </div>
+          </div>
+          <div class="edit-form-panel hidden" id="edit-panel-${idx}">
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Trading Group</label>
+                <input type="text" class="ef-canje-tg" value="${entry.TradingGroup}" />
+              </div>
+              <div class="form-group">
+                <label>MarketDataSourceId</label>
+                <select class="ef-canje-mds">${canjeOpts(entry.MarketDataSourceId)}</select>
+              </div>
+              <div class="form-group">
+                <label>OrderRoutingId</label>
+                <select class="ef-canje-rid">${canjeOpts(entry.OrderRoutingId)}</select>
+              </div>
+              <div class="form-group">
+                <label>Minimum Qty</label>
+                <input type="number" class="ef-canje-qty" value="${entry.MinimumQty}" min="1" />
+              </div>
+              <div class="form-group">
+                <label>ToleranceThresholdMs</label>
+                <input type="number" class="ef-canje-tolerance" value="${entry.ToleranceThresholdMs}" min="0" />
+              </div>
+            </div>
+            <div class="section-label">Asset Symbols</div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label>USD Symbol</label>
+                <input type="text" class="ef-canje-usd" value="${usdSym}" />
+              </div>
+              <div class="form-group">
+                <label>EXT Symbol</label>
+                <input type="text" class="ef-canje-ext" value="${extSym}" />
+              </div>
+            </div>
+            <div class="edit-actions">
+              <button class="btn btn-primary ef-canje-save" data-idx="${idx}">Save</button>
+              <button class="btn btn-secondary ef-cancel" data-idx="${idx}">Cancel</button>
+              <span class="edit-saved-msg" id="edit-saved-${idx}">Saved!</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    html += `</div></div>`;
+  }
+
+  container.innerHTML += html;
+
+  document.getElementById('bulk-tolerance-btn').addEventListener('click', async () => {
+    const val = parseInt(document.getElementById('bulk-tolerance').value, 10);
+    if (isNaN(val)) { alert('Enter a valid number.'); return; }
+    await saveAssets(entryData.map(e => ({ ...e, ToleranceThresholdMs: val })));
+  });
+
+  container.querySelectorAll('.btn-edit').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = btn.dataset.idx;
+      const panel = document.getElementById(`edit-panel-${idx}`);
+      const isOpen = !panel.classList.contains('hidden');
+      container.querySelectorAll('.edit-form-panel').forEach(p => p.classList.add('hidden'));
+      container.querySelectorAll('.btn-edit').forEach(b => { b.classList.remove('active'); b.textContent = 'Edit'; });
+      if (!isOpen) {
+        panel.classList.remove('hidden');
+        btn.classList.add('active');
+        btn.textContent = 'Close';
+      }
+    });
+  });
+
+  container.querySelectorAll('.ef-canje-save').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const idx = parseInt(btn.dataset.idx, 10);
+      const panel = document.getElementById(`edit-panel-${idx}`);
+
+      const newTg        = panel.querySelector('.ef-canje-tg').value.trim().toUpperCase();
+      const newMds       = panel.querySelector('.ef-canje-mds').value;
+      const newRid       = panel.querySelector('.ef-canje-rid').value;
+      const newQty       = parseInt(panel.querySelector('.ef-canje-qty').value, 10);
+      const newTolerance = parseInt(panel.querySelector('.ef-canje-tolerance').value, 10);
+      const newUsd       = panel.querySelector('.ef-canje-usd').value.trim().toUpperCase();
+      const newExt       = panel.querySelector('.ef-canje-ext').value.trim().toUpperCase();
+
+      if (!newTg || !newUsd || !newExt || isNaN(newQty) || isNaN(newTolerance)) {
+        alert('All fields are required.');
+        return;
+      }
+
+      const updated = buildCanjeEntry(newMds, newRid, newTg, newQty, newTolerance, newUsd, newExt);
+      const newData = [...entryData];
+      newData[idx] = updated;
+      await saveAssets(newData);
+
+      const msg = document.getElementById(`edit-saved-${idx}`);
+      if (msg) { msg.classList.add('visible'); setTimeout(() => msg.classList.remove('visible'), 2000); }
+    });
+  });
+
+  container.querySelectorAll('.ef-cancel').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = btn.dataset.idx;
+      document.getElementById(`edit-panel-${idx}`).classList.add('hidden');
+      const editBtn = container.querySelector(`.btn-edit[data-idx="${idx}"]`);
+      if (editBtn) { editBtn.classList.remove('active'); editBtn.textContent = 'Edit'; }
+    });
+  });
+}
+
+// ── Canje add form ─────────────────────────────────────────────────────────
+document.getElementById('canje-preview-btn').addEventListener('click', () => {
+  const mdsId  = document.getElementById('canje-mds-id').value;
+  const rid    = document.getElementById('canje-routing-id').value;
+  const tg     = document.getElementById('canje-trading-group').value.trim().toUpperCase();
+  const minQty = document.getElementById('canje-min-qty').value;
+  const tol    = document.getElementById('canje-tolerance').value;
+  const usdSym = document.getElementById('canje-symbol-usd').value.trim().toUpperCase();
+  const extSym = document.getElementById('canje-symbol-ext').value.trim().toUpperCase();
+
+  if (!tg || !usdSym || !extSym) { showCanjeResult('Please fill in all fields before previewing.', 'error'); return; }
+  const entry = buildCanjeEntry(mdsId, rid, tg, minQty, tol, usdSym, extSym);
+  document.getElementById('canje-preview-json').textContent = JSON.stringify(entry, null, 2);
+  document.getElementById('canje-preview-container').classList.remove('hidden');
+  document.getElementById('canje-add-result').classList.add('hidden');
+});
+
+document.getElementById('canje-add-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const mdsId  = document.getElementById('canje-mds-id').value;
+  const rid    = document.getElementById('canje-routing-id').value;
+  const tg     = document.getElementById('canje-trading-group').value.trim().toUpperCase();
+  const minQty = document.getElementById('canje-min-qty').value;
+  const tol    = document.getElementById('canje-tolerance').value;
+  const usdSym = document.getElementById('canje-symbol-usd').value.trim().toUpperCase();
+  const extSym = document.getElementById('canje-symbol-ext').value.trim().toUpperCase();
+
+  if (entryData.some(d => d.TradingGroup === tg)) {
+    showCanjeResult(`TradingGroup "${tg}" already exists.`, 'error');
+    return;
+  }
+  const entry = buildCanjeEntry(mdsId, rid, tg, minQty, tol, usdSym, extSym);
+  await saveAssets([...entryData, entry], false, false, true);
+});
+
+function showCanjeResult(msg, type) {
+  const el = document.getElementById('canje-add-result');
+  el.textContent = msg;
+  el.className = `result-msg ${type}`;
+  el.classList.remove('hidden');
+}
+
 // ── TITA build entry ───────────────────────────────────────────────────────
 function buildTitaEntry(tradingGroup, symbol, securityType, minQty, lotSize, pxFactor, orderRoutingId = 'XMEV') {
   const isRepo = tradingGroup === 'REPO';
@@ -953,7 +1312,7 @@ document.getElementById('tita-add-form').addEventListener('submit', async e => {
 });
 
 // ── Save ───────────────────────────────────────────────────────────────────
-async function saveAssets(newData, isAdd = false, isTitaAdd = false) {
+async function saveAssets(newData, isAdd = false, isTitaAdd = false, isCanjeAdd = false) {
   const rootKey = EDITOR_CONFIG[currentEditor].rootKey;
   try {
     const res = await fetch(`/api/assets/${currentEditor}`, {
@@ -980,9 +1339,16 @@ async function saveAssets(newData, isAdd = false, isTitaAdd = false) {
         .map(st => `<option value="${st}">${st}</option>`).join('');
       secSel.disabled = false;
     }
+    if (isCanjeAdd) {
+      showCanjeResult('Entry added successfully!', 'success');
+      document.getElementById('canje-add-form').reset();
+      document.getElementById('canje-preview-container').classList.add('hidden');
+      populateCanjeDropdowns();
+    }
   } catch (err) {
     if (isAdd) { showResult('Error: ' + err.message, 'error'); }
     else if (isTitaAdd) { showTitaResult('Error: ' + err.message, 'error'); }
+    else if (isCanjeAdd) { showCanjeResult('Error: ' + err.message, 'error'); }
     else { alert('Error saving: ' + err.message); renderAll(); }
   }
 }
@@ -1040,17 +1406,18 @@ document.querySelectorAll('.editor-btn').forEach(btn => {
     document.getElementById('tab-add').classList.add('active');
 
     // Show/hide appropriate add wrapper
-    const isTita = EDITOR_CONFIG[currentEditor].type === 'tita';
-    document.getElementById('dxb-add-wrapper').classList.toggle('hidden', isTita);
-    document.getElementById('tita-add-wrapper').classList.toggle('hidden', !isTita);
+    const editorType = EDITOR_CONFIG[currentEditor].type;
+    document.getElementById('dxb-add-wrapper').classList.toggle('hidden', editorType !== 'dxb');
+    document.getElementById('tita-add-wrapper').classList.toggle('hidden', editorType !== 'tita');
+    document.getElementById('canje-add-wrapper').classList.toggle('hidden', editorType !== 'canje');
 
     // Clear add forms
-    if (!isTita) {
+    if (editorType === 'dxb') {
       populateRoutingDropdown();
       document.getElementById('add-form').reset();
       document.getElementById('preview-container').classList.add('hidden');
       document.getElementById('add-result').classList.add('hidden');
-    } else {
+    } else if (editorType === 'tita') {
       document.getElementById('tita-add-form').reset();
       document.getElementById('tita-preview-container').classList.add('hidden');
       document.getElementById('tita-add-result').classList.add('hidden');
@@ -1059,6 +1426,11 @@ document.querySelectorAll('.editor-btn').forEach(btn => {
       secSel.innerHTML = ['BOND', 'NEGOTIABLE_BOND', 'LETRAS_DEL_TESORO']
         .map(st => `<option value="${st}">${st}</option>`).join('');
       secSel.disabled = false;
+    } else if (editorType === 'canje') {
+      populateCanjeDropdowns();
+      document.getElementById('canje-add-form').reset();
+      document.getElementById('canje-preview-container').classList.add('hidden');
+      document.getElementById('canje-add-result').classList.add('hidden');
     }
 
     document.getElementById('checklist-container').innerHTML = '<p class="loading">Loading...</p>';
@@ -1071,13 +1443,19 @@ document.querySelectorAll('.editor-btn').forEach(btn => {
   });
 });
 
-// ── Populate routing dropdown ──────────────────────────────────────────────
+// ── Populate routing dropdowns ─────────────────────────────────────────────
 function populateRoutingDropdown() {
   const options = routingIds().map(id => `<option value="${id}">${id}</option>`).join('');
   document.getElementById('primary-mds-id').innerHTML = options;
   document.getElementById('primary-routing-id').innerHTML = options;
   document.getElementById('liquidity-mds-id').innerHTML = options;
   document.getElementById('liquidity-routing-id').innerHTML = options;
+}
+
+function populateCanjeDropdowns() {
+  const options = EDITOR_CONFIG.canje.routingIds.map(id => `<option value="${id}">${id}</option>`).join('');
+  document.getElementById('canje-mds-id').innerHTML = options;
+  document.getElementById('canje-routing-id').innerHTML = options;
 }
 
 // ── Sticky header offset ───────────────────────────────────────────────────
@@ -1089,6 +1467,7 @@ function updateHeaderOffset() {
 // ── Init ───────────────────────────────────────────────────────────────────
 updateHeaderOffset();
 populateRoutingDropdown();
+populateCanjeDropdowns();
 window.addEventListener('resize', updateHeaderOffset);
 
 loadAssets().catch(err => {

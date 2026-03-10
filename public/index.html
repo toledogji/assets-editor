@@ -16,6 +16,7 @@
       <button class="editor-btn active" data-editor="dxb">DxB</button>
       <button class="editor-btn" data-editor="dxc">DxC</button>
       <button class="editor-btn" data-editor="tita">TITA Bonds</button>
+      <button class="editor-btn" data-editor="canje">Canje</button>
     </aside>
 
     <!-- MAIN -->
@@ -130,6 +131,59 @@
                 <button type="submit" id="add-btn" class="btn btn-primary">Add Trading Group</button>
               </div>
               <div id="add-result" class="result-msg hidden"></div>
+            </form>
+          </div>
+
+          <!-- Canje add form -->
+          <div id="canje-add-wrapper" class="hidden">
+            <div id="canje-routing-balance" class="routing-balance"></div>
+            <form id="canje-add-form">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="canje-mds-id">MarketDataSourceId *</label>
+                  <select id="canje-mds-id"></select>
+                </div>
+                <div class="form-group">
+                  <label for="canje-routing-id">OrderRoutingId *</label>
+                  <select id="canje-routing-id"></select>
+                </div>
+                <div class="form-group">
+                  <label for="canje-trading-group">Trading Group *</label>
+                  <input type="text" id="canje-trading-group" placeholder="e.g. AL30" required />
+                </div>
+                <div class="form-group">
+                  <label for="canje-min-qty">Minimum Qty *</label>
+                  <input type="number" id="canje-min-qty" value="1" min="1" required />
+                </div>
+                <div class="form-group">
+                  <label for="canje-tolerance">ToleranceThresholdMs *</label>
+                  <input type="number" id="canje-tolerance" value="3000" min="0" required />
+                </div>
+              </div>
+              <h3>Asset Symbols</h3>
+              <p class="hint">
+                SecurityIDs auto-generated: <code>{Symbol}-0001-C-CT-{Currency}</code> (T+0) and <code>{Symbol}-0002-C-CT-{Currency}</code> (T+1).
+                LiquidityAsset uses the USD T+1 SecurityID.
+              </p>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="canje-symbol-usd">USD Symbol *</label>
+                  <input type="text" id="canje-symbol-usd" placeholder="e.g. AL30D" required />
+                </div>
+                <div class="form-group">
+                  <label for="canje-symbol-ext">EXT Symbol *</label>
+                  <input type="text" id="canje-symbol-ext" placeholder="e.g. AL30C" required />
+                </div>
+              </div>
+              <div id="canje-preview-container" class="preview hidden">
+                <h3>Preview</h3>
+                <pre id="canje-preview-json"></pre>
+              </div>
+              <div class="form-actions">
+                <button type="button" id="canje-preview-btn" class="btn btn-secondary">Preview</button>
+                <button type="submit" class="btn btn-primary">Add Entry</button>
+              </div>
+              <div id="canje-add-result" class="result-msg hidden"></div>
             </form>
           </div>
 
