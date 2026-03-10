@@ -83,11 +83,24 @@ const EDITOR_CONFIG = {
 - `saveAssets(newData, isAdd, isTitaAdd)` — POSTs `{ [rootKey]: newData }`, calls `renderAll()`
 - `renderChecklist()` / `renderTitaChecklist()` — Delete tab per type
 - `renderEditList()` / `renderTitaEditList()` — Edit tab per type
-- `renderRoutingBalance()` — Add tab (dxb type only); balance cards per OrderRoutingId
-- `buildNewEntries()` — builds T+0 + T+1 pair for dxb type
+- `renderRoutingBalance()` — Add tab; for dxb type shows two sections (Primary / Liquidity), each with cards per routing ID counting unique TradingGroups; for tita type shows a single flat count per OrderRoutingId
+- `buildNewEntries(tg, primaryMdsId, primaryRoutingId, liquidityMdsId, liquidityRoutingId, minQty, usdSym, extSym, arsSym)` — builds T+0 + T+1 pair; all 4 routing fields are set independently
 - `buildTitaEntry()` — builds single TITA entry; REPO uses `#-U-CT-ARS` pattern, no LiquidityAsset
+- `populateRoutingDropdown()` — populates all 4 Add-form routing selects (`primary-mds-id`, `primary-routing-id`, `liquidity-mds-id`, `liquidity-routing-id`)
 
 **Add tab HTML:** two wrappers inside `#tab-add` — `#dxb-add-wrapper` and `#tita-add-wrapper`. Only one is visible at a time based on editor type.
+
+**DxB/DxC Add form routing fields** (4 independent selects):
+- `#primary-mds-id` → `PrimaryMarketDataSourceId`
+- `#primary-routing-id` → `PrimaryOrderRoutingId`
+- `#liquidity-mds-id` → `LiquidityMarketDataSourceId`
+- `#liquidity-routing-id` → `LiquidityOrderRoutingId`
+
+**DxB/DxC Edit panel routing fields** (4 independent selects):
+- `.ef-primary-mds` → `PrimaryMarketDataSourceId`
+- `.ef-primary-rid` → `PrimaryOrderRoutingId`
+- `.ef-liquidity-mds` → `LiquidityMarketDataSourceId`
+- `.ef-liquidity-rid` → `LiquidityOrderRoutingId`
 
 **Sticky layout:** header `position: sticky; top: 0`. Toolbar uses `top: var(--header-h)` set by JS from `#main-header.offsetHeight`.
 
@@ -106,20 +119,24 @@ const EDITOR_CONFIG = {
 **DxB/DxC entry** (root key `DxB`, two entries per TradingGroup — one per SettlementType):
 ```json
 {
-  "MarketDataSourceId": "XMEV_1",
-  "OrderRoutingId": "XMEV_1",
+  "PrimaryExchange": "XMEV",
+  "PrimaryMarketDataSourceId": "XMEV_1",
+  "PrimaryOrderRoutingId": "XMEV_1",
+  "LiquidityExchange": "XMEV",
+  "LiquidityMarketDataSourceId": "XMEV_1",
+  "LiquidityOrderRoutingId": "XMEV_1",
   "TradingGroup": "AL30",
   "SettlementType": "T_PLUS_0",
   "MinimumQty": 1,
   "ToleranceThresholdMs": 3000,
   "Assets": [
-    { "Symbol": "AL30D", "SecurityID": "AL30D-0001-C-CT-USD", "SecurityType": "BOND", "Currency": "USD", "Underlying": "AL30", "SettlementType": "T_PLUS_0" },
-    { "Symbol": "AL30C", "SecurityID": "AL30C-0001-C-CT-EXT", "SecurityType": "BOND", "Currency": "EXT", "Underlying": "AL30", "SettlementType": "T_PLUS_0" },
-    { "Symbol": "AL30",  "SecurityID": "AL30-0001-C-CT-ARS",  "SecurityType": "BOND", "Currency": "ARS", "Underlying": "AL30", "SettlementType": "T_PLUS_0" }
+    { "Exchange": "XMEV", "Symbol": "AL30D", "SecurityID": "AL30D-0001-C-CT-USD", "SecurityType": "BOND", "Currency": "USD", "Underlying": "AL30", "SettlementType": "T_PLUS_0" },
+    { "Exchange": "XMEV", "Symbol": "AL30C", "SecurityID": "AL30C-0001-C-CT-EXT", "SecurityType": "BOND", "Currency": "EXT", "Underlying": "AL30", "SettlementType": "T_PLUS_0" },
+    { "Exchange": "XMEV", "Symbol": "AL30",  "SecurityID": "AL30-0001-C-CT-ARS",  "SecurityType": "BOND", "Currency": "ARS", "Underlying": "AL30", "SettlementType": "T_PLUS_0" }
   ]
 }
 ```
-SecurityID: `{Symbol}-0001-C-CT-{Currency}` (T+0) / `0002` (T+1). `Underlying` = `TradingGroup`.
+SecurityID: `{Symbol}-0001-C-CT-{Currency}` (T+0) / `0002` (T+1). `Underlying` = `TradingGroup`. Exchange is always `XMEV`. All 4 routing fields (Primary/Liquidity × MarketDataSourceId/OrderRoutingId) are independently configurable.
 
 **TITA entry** (root key `TITA`, one entry per symbol/Underlying):
 ```json

@@ -390,8 +390,23 @@ nav {
 /* ── Routing Balance ── */
 .routing-balance {
   display: flex;
-  gap: 12px;
+  flex-direction: column;
+  gap: 8px;
   margin-bottom: 16px;
+}
+
+.routing-section-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #484f58;
+  margin-top: 4px;
+}
+
+.routing-cards-row {
+  display: flex;
+  gap: 12px;
   flex-wrap: wrap;
 }
 

@@ -106,7 +106,8 @@ function renderChecklist() {
           <div class="entry-info">
             ${settlementBadge(entry.SettlementType)}
             <div class="entry-meta">
-              <strong>OrderRoutingId:</strong> ${entry.OrderRoutingId} &nbsp;|&nbsp;
+              <strong>Primary:</strong> ${entry.PrimaryOrderRoutingId} &nbsp;|&nbsp;
+              <strong>Liquidity:</strong> ${entry.LiquidityOrderRoutingId} &nbsp;|&nbsp;
               <strong>MinQty:</strong> ${entry.MinimumQty} &nbsp;|&nbsp;
               <strong>ToleranceMs:</strong> ${entry.ToleranceThresholdMs}
             </div>
@@ -364,7 +365,8 @@ function renderEditList() {
             <div class="entry-info">
               ${settlementBadge(entry.SettlementType)}
               <div class="entry-meta">
-                <strong>OrderRoutingId:</strong> ${entry.OrderRoutingId} &nbsp;|&nbsp;
+                <strong>Primary:</strong> ${entry.PrimaryOrderRoutingId} &nbsp;|&nbsp;
+                <strong>Liquidity:</strong> ${entry.LiquidityOrderRoutingId} &nbsp;|&nbsp;
                 <strong>MinQty:</strong> ${entry.MinimumQty}
               </div>
               <div class="entry-assets">${assetChips(entry.Assets)}</div>
@@ -380,12 +382,30 @@ function renderEditList() {
                 <input type="text" class="ef-tg" value="${entry.TradingGroup}" />
               </div>
               <div class="form-group">
-                <label>Order Routing ID</label>
-                <select class="ef-rid">${routingOptions(entry.OrderRoutingId)}</select>
-              </div>
-              <div class="form-group">
                 <label>Minimum Qty</label>
                 <input type="number" class="ef-qty" value="${entry.MinimumQty}" min="1" />
+              </div>
+            </div>
+            <div class="section-label">Primary</div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label>PrimaryMarketDataSourceId</label>
+                <select class="ef-primary-mds">${routingOptions(entry.PrimaryMarketDataSourceId)}</select>
+              </div>
+              <div class="form-group">
+                <label>PrimaryOrderRoutingId</label>
+                <select class="ef-primary-rid">${routingOptions(entry.PrimaryOrderRoutingId)}</select>
+              </div>
+            </div>
+            <div class="section-label">Liquidity</div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label>LiquidityMarketDataSourceId</label>
+                <select class="ef-liquidity-mds">${routingOptions(entry.LiquidityMarketDataSourceId)}</select>
+              </div>
+              <div class="form-group">
+                <label>LiquidityOrderRoutingId</label>
+                <select class="ef-liquidity-rid">${routingOptions(entry.LiquidityOrderRoutingId)}</select>
               </div>
             </div>
             <div class="section-label">Asset Symbols</div>
@@ -449,13 +469,16 @@ function renderEditList() {
       const idx = parseInt(btn.dataset.idx, 10);
       const panel = document.getElementById(`edit-panel-${idx}`);
 
-      const newTg        = panel.querySelector('.ef-tg').value.trim().toUpperCase();
-      const newRid       = panel.querySelector('.ef-rid').value;
-      const newQty       = parseInt(panel.querySelector('.ef-qty').value, 10);
-      const newUsd       = panel.querySelector('.ef-usd').value.trim().toUpperCase();
-      const newExt       = panel.querySelector('.ef-ext').value.trim().toUpperCase();
-      const newArs       = panel.querySelector('.ef-ars').value.trim().toUpperCase();
-      const newTolerance = parseInt(panel.querySelector('.ef-tolerance').value, 10);
+      const newTg              = panel.querySelector('.ef-tg').value.trim().toUpperCase();
+      const newPrimaryMds      = panel.querySelector('.ef-primary-mds').value;
+      const newPrimaryRid      = panel.querySelector('.ef-primary-rid').value;
+      const newLiquidityMds    = panel.querySelector('.ef-liquidity-mds').value;
+      const newLiquidityRid    = panel.querySelector('.ef-liquidity-rid').value;
+      const newQty             = parseInt(panel.querySelector('.ef-qty').value, 10);
+      const newUsd             = panel.querySelector('.ef-usd').value.trim().toUpperCase();
+      const newExt             = panel.querySelector('.ef-ext').value.trim().toUpperCase();
+      const newArs             = panel.querySelector('.ef-ars').value.trim().toUpperCase();
+      const newTolerance       = parseInt(panel.querySelector('.ef-tolerance').value, 10);
 
       if (!newTg || !newUsd || !newExt || !newArs || isNaN(newQty) || isNaN(newTolerance)) {
         alert('All fields are required.');
@@ -466,14 +489,19 @@ function renderEditList() {
       const seq = SEQ[entry.SettlementType];
       const updated = {
         ...entry,
+        PrimaryExchange: 'XMEV',
+        PrimaryMarketDataSourceId: newPrimaryMds,
+        PrimaryOrderRoutingId: newPrimaryRid,
+        LiquidityExchange: 'XMEV',
+        LiquidityMarketDataSourceId: newLiquidityMds,
+        LiquidityOrderRoutingId: newLiquidityRid,
         TradingGroup: newTg,
-        OrderRoutingId: newRid,
         MinimumQty: newQty,
         ToleranceThresholdMs: newTolerance,
         Assets: [
-          { Symbol: newUsd, SecurityID: `${newUsd}-${seq}-C-CT-USD`, SecurityType: entry.Assets[0]?.SecurityType || 'BOND', Currency: 'USD', Underlying: newTg, SettlementType: entry.SettlementType },
-          { Symbol: newExt, SecurityID: `${newExt}-${seq}-C-CT-EXT`, SecurityType: entry.Assets[1]?.SecurityType || 'BOND', Currency: 'EXT', Underlying: newTg, SettlementType: entry.SettlementType },
-          { Symbol: newArs, SecurityID: `${newArs}-${seq}-C-CT-ARS`, SecurityType: entry.Assets[2]?.SecurityType || 'BOND', Currency: 'ARS', Underlying: newTg, SettlementType: entry.SettlementType },
+          { Exchange: 'XMEV', Symbol: newUsd, SecurityID: `${newUsd}-${seq}-C-CT-USD`, SecurityType: entry.Assets[0]?.SecurityType || 'BOND', Currency: 'USD', Underlying: newTg, SettlementType: entry.SettlementType },
+          { Exchange: 'XMEV', Symbol: newExt, SecurityID: `${newExt}-${seq}-C-CT-EXT`, SecurityType: entry.Assets[1]?.SecurityType || 'BOND', Currency: 'EXT', Underlying: newTg, SettlementType: entry.SettlementType },
+          { Exchange: 'XMEV', Symbol: newArs, SecurityID: `${newArs}-${seq}-C-CT-ARS`, SecurityType: entry.Assets[2]?.SecurityType || 'BOND', Currency: 'ARS', Underlying: newTg, SettlementType: entry.SettlementType },
         ],
       };
 
@@ -723,55 +751,94 @@ function renderRoutingBalance() {
     entryData.forEach(entry => {
       if (counts[entry.OrderRoutingId] !== undefined) counts[entry.OrderRoutingId]++;
     });
+
+    const max = Math.max(...routingIds().map(id => counts[id]), 1);
+    const minCount = Math.min(...routingIds().map(id => counts[id]));
+    el.innerHTML = routingIds().map(id => {
+      const n = counts[id];
+      const pct = Math.round((n / max) * 100);
+      const isFewest = n === minCount;
+      return `
+        <div class="routing-card${isFewest ? ' fewest' : ''}">
+          <div class="routing-card-header">
+            <span class="routing-card-name">${id}</span>
+            ${isFewest ? '<span class="fewest-badge">fewest</span>' : ''}
+          </div>
+          <div class="routing-card-count">${n}</div>
+          <div class="routing-card-label">${n !== 1 ? 'entries' : 'entry'}</div>
+          <div class="routing-bar-wrap"><div class="routing-bar" style="width:${pct}%"></div></div>
+        </div>
+      `;
+    }).join('');
   } else {
-    // Count unique TradingGroups per OrderRoutingId
-    const seen = {};
+    // Count unique TradingGroups per PrimaryOrderRoutingId and LiquidityOrderRoutingId
+    const primaryCounts = {};
+    const liquidityCounts = {};
+    routingIds().forEach(id => { primaryCounts[id] = 0; liquidityCounts[id] = 0; });
+
+    const seenPrimary = {};
+    const seenLiquidity = {};
     entryData.forEach(entry => {
-      const key = entry.OrderRoutingId + '|' + entry.TradingGroup;
-      if (!seen[key] && counts[entry.OrderRoutingId] !== undefined) {
-        seen[key] = true;
-        counts[entry.OrderRoutingId]++;
+      const pk = entry.PrimaryOrderRoutingId + '|' + entry.TradingGroup;
+      if (!seenPrimary[pk] && primaryCounts[entry.PrimaryOrderRoutingId] !== undefined) {
+        seenPrimary[pk] = true;
+        primaryCounts[entry.PrimaryOrderRoutingId]++;
+      }
+      const lk = entry.LiquidityOrderRoutingId + '|' + entry.TradingGroup;
+      if (!seenLiquidity[lk] && liquidityCounts[entry.LiquidityOrderRoutingId] !== undefined) {
+        seenLiquidity[lk] = true;
+        liquidityCounts[entry.LiquidityOrderRoutingId]++;
       }
     });
-  }
 
-  const max = Math.max(...routingIds().map(id => counts[id]), 1);
-  const minCount = Math.min(...routingIds().map(id => counts[id]));
-  const itemLabel = type === 'tita' ? 'entry' : 'trading group';
-  const itemLabelPlural = type === 'tita' ? 'entries' : 'trading groups';
+    const makeCards = (countMap) => {
+      const max = Math.max(...routingIds().map(id => countMap[id]), 1);
+      const minCount = Math.min(...routingIds().map(id => countMap[id]));
+      return routingIds().map(id => {
+        const n = countMap[id];
+        const pct = Math.round((n / max) * 100);
+        const isFewest = n === minCount;
+        return `
+          <div class="routing-card${isFewest ? ' fewest' : ''}">
+            <div class="routing-card-header">
+              <span class="routing-card-name">${id}</span>
+              ${isFewest ? '<span class="fewest-badge">fewest</span>' : ''}
+            </div>
+            <div class="routing-card-count">${n}</div>
+            <div class="routing-card-label">${n !== 1 ? 'trading groups' : 'trading group'}</div>
+            <div class="routing-bar-wrap"><div class="routing-bar" style="width:${pct}%"></div></div>
+          </div>
+        `;
+      }).join('');
+    };
 
-  el.innerHTML = routingIds().map(id => {
-    const n = counts[id];
-    const pct = Math.round((n / max) * 100);
-    const isFewest = n === minCount;
-    return `
-      <div class="routing-card${isFewest ? ' fewest' : ''}">
-        <div class="routing-card-header">
-          <span class="routing-card-name">${id}</span>
-          ${isFewest ? '<span class="fewest-badge">fewest</span>' : ''}
-        </div>
-        <div class="routing-card-count">${n}</div>
-        <div class="routing-card-label">${n !== 1 ? itemLabelPlural : itemLabel}</div>
-        <div class="routing-bar-wrap"><div class="routing-bar" style="width:${pct}%"></div></div>
-      </div>
+    el.innerHTML = `
+      <div class="routing-section-label">Primary</div>
+      <div class="routing-cards-row">${makeCards(primaryCounts)}</div>
+      <div class="routing-section-label">Liquidity</div>
+      <div class="routing-cards-row">${makeCards(liquidityCounts)}</div>
     `;
-  }).join('');
+  }
 }
 
 // ── Add form (DxB/DxC) ─────────────────────────────────────────────────────
-function buildNewEntries(tg, orderRoutingId, minQty, usdSym, extSym, arsSym) {
+function buildNewEntries(tg, primaryMdsId, primaryRoutingId, liquidityMdsId, liquidityRoutingId, minQty, usdSym, extSym, arsSym) {
   const { toleranceMs } = EDITOR_CONFIG[currentEditor];
   const makeEntry = (settlement, seqCode) => ({
-    MarketDataSourceId: 'XMEV_1',
-    OrderRoutingId: orderRoutingId,
+    PrimaryExchange: 'XMEV',
+    PrimaryMarketDataSourceId: primaryMdsId,
+    PrimaryOrderRoutingId: primaryRoutingId,
+    LiquidityExchange: 'XMEV',
+    LiquidityMarketDataSourceId: liquidityMdsId,
+    LiquidityOrderRoutingId: liquidityRoutingId,
     TradingGroup: tg,
     SettlementType: settlement,
     MinimumQty: Number(minQty),
     ToleranceThresholdMs: toleranceMs,
     Assets: [
-      { Symbol: usdSym, SecurityID: `${usdSym}-${seqCode}-C-CT-USD`, SecurityType: 'BOND', Currency: 'USD', Underlying: tg, SettlementType: settlement },
-      { Symbol: extSym, SecurityID: `${extSym}-${seqCode}-C-CT-EXT`, SecurityType: 'BOND', Currency: 'EXT', Underlying: tg, SettlementType: settlement },
-      { Symbol: arsSym, SecurityID: `${arsSym}-${seqCode}-C-CT-ARS`, SecurityType: 'BOND', Currency: 'ARS', Underlying: tg, SettlementType: settlement },
+      { Exchange: 'XMEV', Symbol: usdSym, SecurityID: `${usdSym}-${seqCode}-C-CT-USD`, SecurityType: 'BOND', Currency: 'USD', Underlying: tg, SettlementType: settlement },
+      { Exchange: 'XMEV', Symbol: extSym, SecurityID: `${extSym}-${seqCode}-C-CT-EXT`, SecurityType: 'BOND', Currency: 'EXT', Underlying: tg, SettlementType: settlement },
+      { Exchange: 'XMEV', Symbol: arsSym, SecurityID: `${arsSym}-${seqCode}-C-CT-ARS`, SecurityType: 'BOND', Currency: 'ARS', Underlying: tg, SettlementType: settlement },
     ],
   });
   return [makeEntry('T_PLUS_0', '0001'), makeEntry('T_PLUS_1', '0002')];
@@ -780,7 +847,10 @@ function buildNewEntries(tg, orderRoutingId, minQty, usdSym, extSym, arsSym) {
 function getFormValues() {
   return {
     tg: document.getElementById('trading-group').value.trim().toUpperCase(),
-    orderRoutingId: document.getElementById('order-routing-id').value,
+    primaryMdsId: document.getElementById('primary-mds-id').value,
+    primaryRoutingId: document.getElementById('primary-routing-id').value,
+    liquidityMdsId: document.getElementById('liquidity-mds-id').value,
+    liquidityRoutingId: document.getElementById('liquidity-routing-id').value,
     minQty: document.getElementById('minimum-qty').value,
     usdSym: document.getElementById('symbol-usd').value.trim().toUpperCase(),
     extSym: document.getElementById('symbol-ext').value.trim().toUpperCase(),
@@ -789,9 +859,9 @@ function getFormValues() {
 }
 
 document.getElementById('preview-btn').addEventListener('click', () => {
-  const { tg, orderRoutingId, minQty, usdSym, extSym, arsSym } = getFormValues();
+  const { tg, primaryMdsId, primaryRoutingId, liquidityMdsId, liquidityRoutingId, minQty, usdSym, extSym, arsSym } = getFormValues();
   if (!tg || !usdSym || !extSym || !arsSym) { showResult('Please fill in all fields before previewing.', 'error'); return; }
-  const [e0, e1] = buildNewEntries(tg, orderRoutingId, minQty, usdSym, extSym, arsSym);
+  const [e0, e1] = buildNewEntries(tg, primaryMdsId, primaryRoutingId, liquidityMdsId, liquidityRoutingId, minQty, usdSym, extSym, arsSym);
   document.getElementById('preview-t0').textContent = JSON.stringify(e0, null, 2);
   document.getElementById('preview-t1').textContent = JSON.stringify(e1, null, 2);
   document.getElementById('preview-container').classList.remove('hidden');
@@ -800,12 +870,12 @@ document.getElementById('preview-btn').addEventListener('click', () => {
 
 document.getElementById('add-form').addEventListener('submit', async e => {
   e.preventDefault();
-  const { tg, orderRoutingId, minQty, usdSym, extSym, arsSym } = getFormValues();
+  const { tg, primaryMdsId, primaryRoutingId, liquidityMdsId, liquidityRoutingId, minQty, usdSym, extSym, arsSym } = getFormValues();
   if (entryData.some(d => d.TradingGroup === tg)) {
     showResult(`Trading Group "${tg}" already exists in assets.json.`, 'error');
     return;
   }
-  const [e0, e1] = buildNewEntries(tg, orderRoutingId, minQty, usdSym, extSym, arsSym);
+  const [e0, e1] = buildNewEntries(tg, primaryMdsId, primaryRoutingId, liquidityMdsId, liquidityRoutingId, minQty, usdSym, extSym, arsSym);
   await saveAssets([...entryData, e0, e1], true);
 });
 
@@ -1003,8 +1073,11 @@ document.querySelectorAll('.editor-btn').forEach(btn => {
 
 // ── Populate routing dropdown ──────────────────────────────────────────────
 function populateRoutingDropdown() {
-  const select = document.getElementById('order-routing-id');
-  select.innerHTML = routingIds().map(id => `<option value="${id}">${id}</option>`).join('');
+  const options = routingIds().map(id => `<option value="${id}">${id}</option>`).join('');
+  document.getElementById('primary-mds-id').innerHTML = options;
+  document.getElementById('primary-routing-id').innerHTML = options;
+  document.getElementById('liquidity-mds-id').innerHTML = options;
+  document.getElementById('liquidity-routing-id').innerHTML = options;
 }
 
 // ── Sticky header offset ───────────────────────────────────────────────────
