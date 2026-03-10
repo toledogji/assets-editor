@@ -1039,8 +1039,28 @@ function renderCanjeEditList() {
       `<option value="${id}" ${id === selected ? 'selected' : ''}>${id}</option>`
     ).join('');
 
+  // Compute current distribution and balanced target for preview
+  const rids = [...EDITOR_CONFIG.canje.routingIds].sort();
+  const currentCounts = {};
+  rids.forEach(id => { currentCounts[id] = 0; });
+  entryData.forEach(e => { if (currentCounts[e.OrderRoutingId] !== undefined) currentCounts[e.OrderRoutingId]++; });
+  const total = entryData.length;
+  const base = Math.floor(total / rids.length);
+  const extra = total % rids.length;
+  const targetCounts = {};
+  rids.forEach((id, i) => { targetCounts[id] = base + (i < extra ? 1 : 0); });
+  const currentSummary = rids.map(id => `${id}: ${currentCounts[id]}`).join(' &nbsp;·&nbsp; ');
+  const targetSummary  = rids.map(id => `${id}: ${targetCounts[id]}`).join(' &nbsp;·&nbsp; ');
+
   const firstTolerance = entryData.length > 0 ? entryData[0].ToleranceThresholdMs : 3000;
   container.innerHTML = `
+    <div class="bulk-tolerance-bar">
+      <div class="balance-info">
+        <span class="balance-label">Balance OrderRoutingId across routing sessions</span>
+        <span class="balance-summary">Now: ${currentSummary} &nbsp;→&nbsp; After: ${targetSummary}</span>
+      </div>
+      <button id="bulk-balance-btn" class="btn btn-secondary">Balance</button>
+    </div>
     <div class="bulk-tolerance-bar">
       <label for="bulk-tolerance">ToleranceThresholdMs — apply to all entries:</label>
       <div class="bulk-tolerance-controls">
@@ -1142,6 +1162,19 @@ function renderCanjeEditList() {
   }
 
   container.innerHTML += html;
+
+  document.getElementById('bulk-balance-btn').addEventListener('click', async () => {
+    const sortedRids = [...EDITOR_CONFIG.canje.routingIds].sort();
+    if (sortedRids.length === 0) return;
+    const sortedIndices = [...entryData.keys()].sort((a, b) =>
+      entryData[a].TradingGroup.localeCompare(entryData[b].TradingGroup)
+    );
+    const newData = [...entryData];
+    sortedIndices.forEach((idx, i) => {
+      newData[idx] = { ...entryData[idx], OrderRoutingId: sortedRids[i % sortedRids.length] };
+    });
+    await saveAssets(newData);
+  });
 
   document.getElementById('bulk-tolerance-btn').addEventListener('click', async () => {
     const val = parseInt(document.getElementById('bulk-tolerance').value, 10);
