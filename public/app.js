@@ -11,7 +11,7 @@ const EDITOR_CONFIG = {
     tradingGroups: ['BONOS', 'LETRAS', 'ONs', 'REPO'],
     securityTypes: ['BOND', 'NEGOTIABLE_BOND', 'LETRAS_DEL_TESORO'],
   },
-  canje: { label: 'Canje',      type: 'canje', toleranceMs: 3000, routingIds: ['XMEV_1','XMEV_2','XMEV_3','XMEV_4'], rootKey: 'CANJE' },
+  canje: { label: 'Canje',      type: 'canje', toleranceMs: 3000, mdsIds: [], routingIds: [], rootKey: 'CANJE' },
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -64,6 +64,8 @@ function renderAll() {
     renderTitaEditList();
     renderRoutingBalance();
   } else if (type === 'canje') {
+    deriveCanjeDynamicOptions();
+    populateCanjeDropdowns();
     renderCanjeChecklist();
     renderCanjeEditList();
     renderRoutingBalance();
@@ -1028,7 +1030,11 @@ function renderCanjeEditList() {
     return;
   }
 
-  const canjeOpts = (selected) =>
+  const canjeMdsOpts = (selected) =>
+    EDITOR_CONFIG.canje.mdsIds.map(id =>
+      `<option value="${id}" ${id === selected ? 'selected' : ''}>${id}</option>`
+    ).join('');
+  const canjeRidOpts = (selected) =>
     EDITOR_CONFIG.canje.routingIds.map(id =>
       `<option value="${id}" ${id === selected ? 'selected' : ''}>${id}</option>`
     ).join('');
@@ -1096,11 +1102,11 @@ function renderCanjeEditList() {
               </div>
               <div class="form-group">
                 <label>MarketDataSourceId</label>
-                <select class="ef-canje-mds">${canjeOpts(entry.MarketDataSourceId)}</select>
+                <select class="ef-canje-mds">${canjeMdsOpts(entry.MarketDataSourceId)}</select>
               </div>
               <div class="form-group">
                 <label>OrderRoutingId</label>
-                <select class="ef-canje-rid">${canjeOpts(entry.OrderRoutingId)}</select>
+                <select class="ef-canje-rid">${canjeRidOpts(entry.OrderRoutingId)}</select>
               </div>
               <div class="form-group">
                 <label>Minimum Qty</label>
@@ -1452,10 +1458,16 @@ function populateRoutingDropdown() {
   document.getElementById('liquidity-routing-id').innerHTML = options;
 }
 
+function deriveCanjeDynamicOptions() {
+  EDITOR_CONFIG.canje.mdsIds     = [...new Set(entryData.map(e => e.MarketDataSourceId))].sort();
+  EDITOR_CONFIG.canje.routingIds = [...new Set(entryData.map(e => e.OrderRoutingId))].sort();
+}
+
 function populateCanjeDropdowns() {
-  const options = EDITOR_CONFIG.canje.routingIds.map(id => `<option value="${id}">${id}</option>`).join('');
-  document.getElementById('canje-mds-id').innerHTML = options;
-  document.getElementById('canje-routing-id').innerHTML = options;
+  const mdsOpts = EDITOR_CONFIG.canje.mdsIds.map(id => `<option value="${id}">${id}</option>`).join('');
+  const ridOpts = EDITOR_CONFIG.canje.routingIds.map(id => `<option value="${id}">${id}</option>`).join('');
+  document.getElementById('canje-mds-id').innerHTML = mdsOpts;
+  document.getElementById('canje-routing-id').innerHTML = ridOpts;
 }
 
 // ── Sticky header offset ───────────────────────────────────────────────────
