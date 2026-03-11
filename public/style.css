@@ -135,6 +135,32 @@ nav {
   border-bottom-color: #388bfd;
 }
 
+/* ── Search bar ── */
+.search-bar {
+  padding: 10px 0 0;
+}
+
+.search-input {
+  width: 100%;
+  max-width: 320px;
+  padding: 7px 12px;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  color: #e1e4e8;
+  font-size: 0.875rem;
+  transition: border-color 0.15s;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #388bfd;
+}
+
+.search-input::placeholder {
+  color: #484f58;
+}
+
 /* ── Tab content ── */
 .tab-content { display: none; }
 .tab-content.active { display: block; }

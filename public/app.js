@@ -2,6 +2,7 @@
 let entryData = [];
 let selectedIndices = new Set();
 let currentEditor = 'dxb';
+let searchQuery = '';
 
 const EDITOR_CONFIG = {
   dxb:   { label: 'DxB',        type: 'dxb',   toleranceMs: 3000, routingIds: ['XMEV_1','XMEV_2','XMEV_3','XMEV_4'], rootKey: 'DxB'   },
@@ -20,6 +21,24 @@ const EDITOR_CONFIG = {
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
+function searchPlaceholder() {
+  return EDITOR_CONFIG[currentEditor].type === 'tita' ? 'Search by Underlying…' : 'Search by Trading Group…';
+}
+
+function matchesSearch(value) {
+  if (!searchQuery) return true;
+  return value.toLowerCase().includes(searchQuery.toLowerCase());
+}
+
+function getVisibleIndices() {
+  const { type } = EDITOR_CONFIG[currentEditor];
+  return entryData.reduce((acc, entry, i) => {
+    const key = type === 'tita' ? entry.Underlying : entry.TradingGroup;
+    if (matchesSearch(key)) acc.push(i);
+    return acc;
+  }, []);
+}
+
 function settlementBadge(s) {
   const cls = s === 'T_PLUS_0' ? 't0' : 't1';
   const label = s === 'T_PLUS_0' ? 'T+0' : 'T+1';
@@ -97,6 +116,7 @@ function renderChecklist() {
 
   let html = '';
   for (const [tg, items] of grouped) {
+    if (!matchesSearch(tg)) continue;
     const allIdxs = items.map(i => i.idx);
     const allChecked = allIdxs.every(i => selectedIndices.has(i));
     const someChecked = allIdxs.some(i => selectedIndices.has(i));
@@ -136,7 +156,7 @@ function renderChecklist() {
     html += `</div></div>`;
   }
 
-  container.innerHTML = html;
+  container.innerHTML = html || '<p class="loading">No entries match your search.</p>';
 
   container.querySelectorAll('.group-checkbox').forEach(cb => {
     if (cb.dataset.indeterminate === 'true') cb.indeterminate = true;
@@ -205,7 +225,9 @@ function renderTitaChecklist() {
 
   let html = '';
   for (const [tg, items] of grouped) {
-    const allIdxs = items.map(i => i.idx);
+    const visItems = items.filter(({ entry }) => matchesSearch(entry.Underlying));
+    if (visItems.length === 0) continue;
+    const allIdxs = visItems.map(i => i.idx);
     const allChecked = allIdxs.every(i => selectedIndices.has(i));
     const someChecked = allIdxs.some(i => selectedIndices.has(i));
     const indeterminate = someChecked && !allChecked;
@@ -218,12 +240,12 @@ function renderTitaChecklist() {
               ${allChecked ? 'checked' : ''} data-indeterminate="${indeterminate}" />
           </div>
           <span class="group-title">${tg}</span>
-          <span class="group-badge">${items.length} entr${items.length === 1 ? 'y' : 'ies'}</span>
+          <span class="group-badge">${visItems.length} entr${visItems.length === 1 ? 'y' : 'ies'}</span>
         </div>
         <div class="group-entries">
     `;
 
-    for (const { entry, idx } of items) {
+    for (const { entry, idx } of visItems) {
       const assetChip = entry.Asset
         ? `<span class="asset-chip">${entry.Asset.Symbol} <span class="currency">${entry.Asset.SettlementType === 'T_PLUS_0' ? 'T+0' : 'T+1'}</span></span>`
         : '';
@@ -253,7 +275,7 @@ function renderTitaChecklist() {
     html += `</div></div>`;
   }
 
-  container.innerHTML = html;
+  container.innerHTML = html || '<p class="loading">No entries match your search.</p>';
 
   container.querySelectorAll('.group-checkbox').forEach(cb => {
     if (cb.dataset.indeterminate === 'true') cb.indeterminate = true;
@@ -272,7 +294,9 @@ function renderTitaChecklist() {
     cb.addEventListener('change', e => {
       e.stopPropagation();
       const tg = cb.dataset.tg;
-      (groupByTradingGroup(entryData).get(tg) || []).forEach(({ idx }) => {
+      const allItems = groupByTradingGroup(entryData).get(tg) || [];
+      const visItems = allItems.filter(({ entry }) => matchesSearch(entry.Underlying));
+      visItems.forEach(({ idx }) => {
         cb.checked ? selectedIndices.add(idx) : selectedIndices.delete(idx);
       });
       updateToolbar();
@@ -294,15 +318,19 @@ function renderTitaChecklist() {
 
 // ── Select / Deselect all ──────────────────────────────────────────────────
 document.getElementById('select-all-btn').addEventListener('click', () => {
-  entryData.forEach((_, i) => selectedIndices.add(i));
+  getVisibleIndices().forEach(i => selectedIndices.add(i));
   const { type } = EDITOR_CONFIG[currentEditor];
-  if (type === 'tita') renderTitaChecklist(); else renderChecklist();
+  if (type === 'tita') renderTitaChecklist();
+  else if (type === 'canje') renderCanjeChecklist();
+  else renderChecklist();
 });
 
 document.getElementById('deselect-all-btn').addEventListener('click', () => {
-  selectedIndices.clear();
+  getVisibleIndices().forEach(i => selectedIndices.delete(i));
   const { type } = EDITOR_CONFIG[currentEditor];
-  if (type === 'tita') renderTitaChecklist(); else renderChecklist();
+  if (type === 'tita') renderTitaChecklist();
+  else if (type === 'canje') renderCanjeChecklist();
+  else renderChecklist();
 });
 
 // ── Delete flow ────────────────────────────────────────────────────────────
@@ -361,6 +389,7 @@ function renderEditList() {
 
   let html = '';
   for (const [tg, items] of grouped) {
+    if (!matchesSearch(tg)) continue;
     html += `
       <div class="group-block">
         <div class="group-header" style="cursor:default">
@@ -576,16 +605,18 @@ function renderTitaEditList() {
 
   let html = '';
   for (const [tg, items] of grouped) {
+    const visItems = items.filter(({ entry }) => matchesSearch(entry.Underlying));
+    if (visItems.length === 0) continue;
     html += `
       <div class="group-block">
         <div class="group-header" style="cursor:default">
           <span class="group-title">${tg}</span>
-          <span class="group-badge">${items.length} entr${items.length === 1 ? 'y' : 'ies'}</span>
+          <span class="group-badge">${visItems.length} entr${visItems.length === 1 ? 'y' : 'ies'}</span>
         </div>
         <div class="group-entries">
     `;
 
-    for (const { entry, idx } of items) {
+    for (const { entry, idx } of visItems) {
       const isRepo = entry.TradingGroup === 'REPO';
       const currentSecType = isRepo ? 'REPO' : (entry.Asset ? entry.Asset.SecurityType : 'BOND');
       const assetChip = entry.Asset
@@ -939,7 +970,9 @@ function renderCanjeChecklist() {
 
   let html = '';
   for (const key of sortedKeys) {
-    const items = grouped.get(key);
+    const allItems = grouped.get(key);
+    const items = allItems.filter(({ entry }) => matchesSearch(entry.TradingGroup));
+    if (items.length === 0) continue;
     const allIdxs = items.map(i => i.idx);
     const allChecked = allIdxs.every(i => selectedIndices.has(i));
     const someChecked = allIdxs.some(i => selectedIndices.has(i));
@@ -983,7 +1016,7 @@ function renderCanjeChecklist() {
     html += `</div></div>`;
   }
 
-  container.innerHTML = html;
+  container.innerHTML = html || '<p class="loading">No entries match your search.</p>';
 
   container.querySelectorAll('.group-checkbox').forEach(cb => {
     if (cb.dataset.indeterminate === 'true') cb.indeterminate = true;
@@ -1002,7 +1035,9 @@ function renderCanjeChecklist() {
     cb.addEventListener('change', e => {
       e.stopPropagation();
       const key = cb.dataset.key;
-      (grouped.get(key) || []).forEach(({ idx }) => {
+      const allItems = grouped.get(key) || [];
+      const visItems = allItems.filter(({ entry }) => matchesSearch(entry.TradingGroup));
+      visItems.forEach(({ idx }) => {
         cb.checked ? selectedIndices.add(idx) : selectedIndices.delete(idx);
       });
       updateToolbar();
@@ -1092,7 +1127,10 @@ function renderCanjeEditList() {
 
   let html = '';
   for (const key of sortedKeys) {
-    const items = grouped.get(key).sort((a, b) => a.entry.TradingGroup.localeCompare(b.entry.TradingGroup));
+    const items = grouped.get(key)
+      .filter(({ entry }) => matchesSearch(entry.TradingGroup))
+      .sort((a, b) => a.entry.TradingGroup.localeCompare(b.entry.TradingGroup));
+    if (items.length === 0) continue;
     html += `
       <div class="group-block">
         <div class="group-header" style="cursor:default">
@@ -1433,6 +1471,9 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.querySelectorAll('.tab-content').forEach(s => s.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    const isAddTab = btn.dataset.tab === 'add';
+    document.getElementById('search-bar').classList.toggle('hidden', isAddTab);
+    updateHeaderOffset();
   });
 });
 
@@ -1444,6 +1485,10 @@ document.querySelectorAll('.editor-btn').forEach(btn => {
     document.querySelectorAll('.editor-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('editor-title').textContent = EDITOR_CONFIG[currentEditor].label;
+    searchQuery = '';
+    const searchEl = document.getElementById('search-input');
+    searchEl.value = '';
+    searchEl.placeholder = searchPlaceholder();
 
     // Reset to Add tab
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -1515,6 +1560,22 @@ function populateCanjeDropdowns() {
   document.getElementById('canje-mds-id').innerHTML = mdsOpts;
   document.getElementById('canje-routing-id').innerHTML = ridOpts;
 }
+
+// ── Search ─────────────────────────────────────────────────────────────────
+document.getElementById('search-input').addEventListener('input', e => {
+  searchQuery = e.target.value;
+  const { type } = EDITOR_CONFIG[currentEditor];
+  const activeTab = document.querySelector('.tab-btn.active')?.dataset.tab;
+  if (activeTab === 'delete') {
+    if (type === 'tita') renderTitaChecklist();
+    else if (type === 'canje') renderCanjeChecklist();
+    else renderChecklist();
+  } else if (activeTab === 'edit') {
+    if (type === 'tita') renderTitaEditList();
+    else if (type === 'canje') renderCanjeEditList();
+    else renderEditList();
+  }
+});
 
 // ── Sticky header offset ───────────────────────────────────────────────────
 function updateHeaderOffset() {
