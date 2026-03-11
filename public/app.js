@@ -1495,6 +1495,8 @@ document.querySelectorAll('.editor-btn').forEach(btn => {
     document.querySelectorAll('.tab-content').forEach(s => s.classList.remove('active'));
     document.querySelector('.tab-btn[data-tab="add"]').classList.add('active');
     document.getElementById('tab-add').classList.add('active');
+    document.getElementById('search-bar').classList.add('hidden');
+    updateHeaderOffset();
 
     // Show/hide appropriate add wrapper
     const editorType = EDITOR_CONFIG[currentEditor].type;
