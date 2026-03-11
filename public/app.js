@@ -6,10 +6,15 @@ let currentEditor = 'dxb';
 const EDITOR_CONFIG = {
   dxb:   { label: 'DxB',        type: 'dxb',   toleranceMs: 3000, routingIds: ['XMEV_1','XMEV_2','XMEV_3','XMEV_4'], rootKey: 'DxB'   },
   dxc:   { label: 'DxC',        type: 'dxb',   toleranceMs: 5000, routingIds: ['XMEV_1','XMEV_2','XMEV_3'],           rootKey: 'DxB'   },
-  tita:  { label: 'TITA Bonds', type: 'tita',  toleranceMs: 1000, rootKey: 'TITA',
+  tita:  { label: 'TITA Bonds',  type: 'tita', toleranceMs: 1000, rootKey: 'TITA',
     routingIds: ['XMEV', 'XMEV_2'],
     tradingGroups: ['BONOS', 'LETRAS', 'ONs', 'REPO'],
     securityTypes: ['BOND', 'NEGOTIABLE_BOND', 'LETRAS_DEL_TESORO'],
+  },
+  'tita-stocks': { label: 'TITA Stocks', type: 'tita', toleranceMs: 5000, rootKey: 'TITA',
+    routingIds: ['XMEV', 'XMEV_2'],
+    tradingGroups: ['CEDEAR', 'ADR', 'BR', 'SEC', 'REPO'],
+    securityTypes: ['CERTIFICATE_OF_DEPOSIT', 'STOCK'],
   },
   canje: { label: 'Canje',      type: 'canje', toleranceMs: 3000, mdsIds: [], routingIds: [], rootKey: 'CANJE' },
 };
@@ -38,10 +43,14 @@ function groupByTradingGroup(arr) {
 }
 
 function tgBadge(tg) {
-  const cls = tg === 'BONOS' ? 'tg-bonos'
-    : tg === 'LETRAS' ? 'tg-letras'
-    : tg === 'ONs'    ? 'tg-ons'
-    : tg === 'REPO'   ? 'tg-repo'
+  const cls = tg === 'BONOS'  ? 'tg-bonos'
+    : tg === 'LETRAS'  ? 'tg-letras'
+    : tg === 'ONs'     ? 'tg-ons'
+    : tg === 'REPO'    ? 'tg-repo'
+    : tg === 'CEDEAR'  ? 'tg-cedear'
+    : tg === 'ADR'     ? 'tg-adr'
+    : tg === 'BR'      ? 'tg-br'
+    : tg === 'SEC'     ? 'tg-sec'
     : 'tg-bonos';
   return `<span class="tg-badge ${cls}">${tg}</span>`;
 }
@@ -541,13 +550,15 @@ function renderTitaEditList() {
     return;
   }
 
-  const secTypeOptions = (selected, disabled) =>
-    ['BOND', 'NEGOTIABLE_BOND', 'LETRAS_DEL_TESORO'].map(st =>
+  const { securityTypes, tradingGroups } = EDITOR_CONFIG[currentEditor];
+
+  const secTypeOptions = (selected) =>
+    securityTypes.map(st =>
       `<option value="${st}" ${st === selected ? 'selected' : ''}>${st}</option>`
     ).join('');
 
   const tgOptions = (selected) =>
-    ['BONOS', 'LETRAS', 'ONs', 'REPO'].map(tg =>
+    tradingGroups.map(tg =>
       `<option value="${tg}" ${tg === selected ? 'selected' : ''}>${tg}</option>`
     ).join('');
 
@@ -679,7 +690,7 @@ function renderTitaEditList() {
         secSel.innerHTML = '<option value="REPO" selected>REPO</option>';
         secSel.disabled = true;
       } else {
-        secSel.innerHTML = ['BOND', 'NEGOTIABLE_BOND', 'LETRAS_DEL_TESORO']
+        secSel.innerHTML = EDITOR_CONFIG[currentEditor].securityTypes
           .map(st => `<option value="${st}">${st}</option>`).join('');
         secSel.disabled = false;
       }
@@ -1308,7 +1319,7 @@ document.getElementById('tita-trading-group').addEventListener('change', () => {
     secSel.innerHTML = '<option value="REPO" selected>REPO</option>';
     secSel.disabled = true;
   } else {
-    secSel.innerHTML = ['BOND', 'NEGOTIABLE_BOND', 'LETRAS_DEL_TESORO']
+    secSel.innerHTML = EDITOR_CONFIG[currentEditor].securityTypes
       .map(st => `<option value="${st}">${st}</option>`).join('');
     secSel.disabled = false;
   }
@@ -1372,11 +1383,7 @@ async function saveAssets(newData, isAdd = false, isTitaAdd = false, isCanjeAdd 
       showTitaResult('Entry added successfully!', 'success');
       document.getElementById('tita-add-form').reset();
       document.getElementById('tita-preview-container').classList.add('hidden');
-      // Reset security type dropdown
-      const secSel = document.getElementById('tita-security-type');
-      secSel.innerHTML = ['BOND', 'NEGOTIABLE_BOND', 'LETRAS_DEL_TESORO']
-        .map(st => `<option value="${st}">${st}</option>`).join('');
-      secSel.disabled = false;
+      populateTitaDropdowns();
     }
     if (isCanjeAdd) {
       showCanjeResult('Entry added successfully!', 'success');
@@ -1457,14 +1464,10 @@ document.querySelectorAll('.editor-btn').forEach(btn => {
       document.getElementById('preview-container').classList.add('hidden');
       document.getElementById('add-result').classList.add('hidden');
     } else if (editorType === 'tita') {
+      populateTitaDropdowns();
       document.getElementById('tita-add-form').reset();
       document.getElementById('tita-preview-container').classList.add('hidden');
       document.getElementById('tita-add-result').classList.add('hidden');
-      // Reset security type dropdown
-      const secSel = document.getElementById('tita-security-type');
-      secSel.innerHTML = ['BOND', 'NEGOTIABLE_BOND', 'LETRAS_DEL_TESORO']
-        .map(st => `<option value="${st}">${st}</option>`).join('');
-      secSel.disabled = false;
     } else if (editorType === 'canje') {
       populateCanjeDropdowns();
       document.getElementById('canje-add-form').reset();
@@ -1496,6 +1499,16 @@ function deriveCanjeDynamicOptions() {
   EDITOR_CONFIG.canje.routingIds = [...new Set(entryData.map(e => e.OrderRoutingId))].sort();
 }
 
+function populateTitaDropdowns() {
+  const { tradingGroups, securityTypes, routingIds: titaRids } = EDITOR_CONFIG[currentEditor];
+  document.getElementById('tita-trading-group').innerHTML =
+    tradingGroups.map(tg => `<option value="${tg}">${tg}</option>`).join('');
+  document.getElementById('tita-security-type').innerHTML =
+    securityTypes.map(st => `<option value="${st}">${st}</option>`).join('');
+  document.getElementById('tita-order-routing-id').innerHTML =
+    titaRids.map(id => `<option value="${id}">${id}</option>`).join('');
+}
+
 function populateCanjeDropdowns() {
   const mdsOpts = EDITOR_CONFIG.canje.mdsIds.map(id => `<option value="${id}">${id}</option>`).join('');
   const ridOpts = EDITOR_CONFIG.canje.routingIds.map(id => `<option value="${id}">${id}</option>`).join('');
@@ -1512,6 +1525,9 @@ function updateHeaderOffset() {
 // ── Init ───────────────────────────────────────────────────────────────────
 updateHeaderOffset();
 populateRoutingDropdown();
+// Pre-populate TITA and canje dropdowns (editor is hidden on init, currentEditor is 'dxb')
+currentEditor = 'tita'; populateTitaDropdowns();
+currentEditor = 'dxb';
 populateCanjeDropdowns();
 window.addEventListener('resize', updateHeaderOffset);
 

@@ -9,7 +9,8 @@ const EDITORS = {
   dxb:   { file: path.resolve(__dirname, '../algo-trading-config-prod/dbb/config/assets.json'),    rootKey: 'DxB'   },
   dxc:   { file: path.resolve(__dirname, '../algo-trading-config-prod/dbc/config/assets.json'),    rootKey: 'DxB'   },
   tita:  { file: path.resolve(__dirname, '../algo-trading-config-prod/futop-tita/assets.json'),    rootKey: 'TITA'  },
-  canje: { file: path.resolve(__dirname, '../algo-trading-config-prod/canje/config/assets.json'), rootKey: 'CANJE' },
+  canje:       { file: path.resolve(__dirname, '../algo-trading-config-prod/canje/config/assets.json'),        rootKey: 'CANJE' },
+  'tita-stocks': { file: path.resolve(__dirname, '../algo-trading-config-prod/futop-tita-stocks/assets.json'), rootKey: 'TITA'  },
 };
 
 app.use(express.json());

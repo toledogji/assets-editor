@@ -733,6 +733,10 @@ pre {
 .tg-letras { background: #1a3a0d; color: #56d364; border: 1px solid #2ea043; }
 .tg-ons    { background: #2d1a6b; color: #c8b1f5; border: 1px solid #6e40c9; }
 .tg-repo   { background: #3a1a0d; color: #f5a28a; border: 1px solid #c95a2a; }
+.tg-cedear { background: #0c2d6b; color: #79c0ff; border: 1px solid #1f6feb; }
+.tg-adr    { background: #1a3a0d; color: #56d364; border: 1px solid #2ea043; }
+.tg-br     { background: #2d1a6b; color: #c8b1f5; border: 1px solid #6e40c9; }
+.tg-sec    { background: #1a2a0d; color: #d2f4a0; border: 1px solid #6aa329; }
 
 /* ── Checkbox group header ── */
 .group-check-wrap {
