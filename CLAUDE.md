@@ -58,24 +58,33 @@ const EDITORS = {
 - `entryData` — in-memory copy of the active editor's data array
 - `selectedIndices` — `Set` of checked indices for the Delete tab
 
-**Two editor types** — controlled by `EDITOR_CONFIG[e].type`:
+**Three editor types** — controlled by `EDITOR_CONFIG[e].type`:
 
-| type   | editors    | description |
-|--------|------------|-------------|
-| `dxb`  | DxB, DxC   | Multi-currency assets (USD/EXT/ARS), paired T+0/T+1 entries per TradingGroup, routing balance panel |
-| `tita` | TITA Bonds | Single-currency ARS, one entry per symbol, Asset + optional LiquidityAsset, no routing balance |
+| type    | editors              | description |
+|---------|----------------------|-------------|
+| `dxb`   | DxB, DxC             | Multi-currency assets (USD/EXT/ARS), paired T+0/T+1 entries per TradingGroup, routing balance panel |
+| `tita`  | TITA Bonds, TITA Stocks | Single-currency ARS, one entry per symbol, Asset + optional LiquidityAsset |
+| `canje` | Canje                | USD+EXT pairs, LiquidityAsset, per-entry routing, Balance Routing feature |
 
 **Full EDITOR_CONFIG:**
 ```js
 const EDITOR_CONFIG = {
-  dxb:  { label: 'DxB',        type: 'dxb',  toleranceMs: 3000, routingIds: ['XMEV_1','XMEV_2','XMEV_3','XMEV_4'], rootKey: 'DxB' },
-  dxc:  { label: 'DxC',        type: 'dxb',  toleranceMs: 5000, routingIds: ['XMEV_1','XMEV_2','XMEV_3'],          rootKey: 'DxB' },
-  tita: { label: 'TITA Bonds', type: 'tita', toleranceMs: 1000, rootKey: 'TITA',
-    tradingGroups: ['BONOS', 'LETRAS', 'ONs', 'REPO'],
-    securityTypes: ['BOND', 'NEGOTIABLE_BOND', 'LETRAS_DEL_TESORO'],
+  dxb:   { label: 'DxB',          type: 'dxb',   toleranceMs: 3000, routingIds: ['XMEV_1','XMEV_2','XMEV_3','XMEV_4'], rootKey: 'DxB' },
+  dxc:   { label: 'DxC',          type: 'dxb',   toleranceMs: 5000, routingIds: ['XMEV_1','XMEV_2','XMEV_3'],           rootKey: 'DxB' },
+  tita:  { label: 'TITA Bonds',   type: 'tita',  toleranceMs: 1000, rootKey: 'TITA',
+    routingIds: ['XMEV','XMEV_2'],
+    tradingGroups: ['BONOS','LETRAS','ONs','REPO'],
+    securityTypes: ['BOND','NEGOTIABLE_BOND','LETRAS_DEL_TESORO'],
   },
+  'tita-stocks': { label: 'TITA Stocks', type: 'tita', toleranceMs: 5000, rootKey: 'TITA',
+    routingIds: ['XMEV','XMEV_2'],
+    tradingGroups: ['CEDEAR','ADR','BR','SEC','REPO'],
+    securityTypes: ['CERTIFICATE_OF_DEPOSIT','STOCK'],
+  },
+  canje: { label: 'Canje',        type: 'canje', toleranceMs: 3000, mdsIds: [], routingIds: [], rootKey: 'CANJE' },
 };
 ```
+`canje.mdsIds` and `canje.routingIds` are populated dynamically from `entryData` via `deriveCanjeDynamicOptions()` after each load.
 
 **Key functions:**
 - `loadAssets()` — fetches `/api/assets/${currentEditor}`, extracts `data[rootKey]` into `entryData`, calls `renderAll()`
@@ -86,9 +95,15 @@ const EDITOR_CONFIG = {
 - `renderRoutingBalance()` — Add tab; for dxb type shows two sections (Primary / Liquidity), each with cards per routing ID counting unique TradingGroups; for tita type shows a single flat count per OrderRoutingId
 - `buildNewEntries(tg, primaryMdsId, primaryRoutingId, liquidityMdsId, liquidityRoutingId, minQty, usdSym, extSym, arsSym)` — builds T+0 + T+1 pair; all 4 routing fields are set independently
 - `buildTitaEntry()` — builds single TITA entry; REPO uses `#-U-CT-ARS` pattern, no LiquidityAsset
+- `buildCanjeEntry()` — builds CANJE entry with 4 assets (USD T+0/T+1, EXT T+0/T+1) + LiquidityAsset (USD T+1)
 - `populateRoutingDropdown()` — populates all 4 Add-form routing selects (`primary-mds-id`, `primary-routing-id`, `liquidity-mds-id`, `liquidity-routing-id`)
+- `populateTitaDropdowns()` — fills `tita-trading-group`, `tita-security-type`, `tita-order-routing-id` from `EDITOR_CONFIG[currentEditor]`; called on editor switch and after save
+- `populateCanjeDropdowns()` — fills `canje-mds-id` and `canje-routing-id` from `EDITOR_CONFIG.canje.mdsIds/routingIds`
+- `deriveCanjeDynamicOptions()` — derives unique `MarketDataSourceId` and `OrderRoutingId` from `entryData` and stores into `EDITOR_CONFIG.canje`
+- `renderCanjeChecklist()` / `renderCanjeEditList()` — Delete/Edit tab for Canje
+- Balance Routing (Canje Edit tab) — round-robin assigns `OrderRoutingId` across sorted entries to equalize distribution
 
-**Add tab HTML:** two wrappers inside `#tab-add` — `#dxb-add-wrapper` and `#tita-add-wrapper`. Only one is visible at a time based on editor type.
+**Add tab HTML:** three wrappers inside `#tab-add` — `#dxb-add-wrapper`, `#tita-add-wrapper`, `#canje-add-wrapper`. Only one is visible at a time based on editor type.
 
 **DxB/DxC Add form routing fields** (4 independent selects):
 - `#primary-mds-id` → `PrimaryMarketDataSourceId`
@@ -110,6 +125,11 @@ const EDITOR_CONFIG = {
 1. `server.js` — add to `EDITORS` with `file` and `rootKey: 'DxB'`
 2. `app.js` — add to `EDITOR_CONFIG` with `type: 'dxb'`, `toleranceMs`, `routingIds`
 3. `index.html` — add `<button class="editor-btn" data-editor="...">` in the sidebar
+
+**Same schema as TITA (reuse tita type):**
+1. `server.js` — add to `EDITORS` with `file` and `rootKey: 'TITA'`
+2. `app.js` — add to `EDITOR_CONFIG` with `type: 'tita'`, `toleranceMs`, `routingIds`, `tradingGroups`, `securityTypes`
+3. `index.html` — add sidebar button (the TITA wrappers and form are shared)
 
 **New schema type:**
 1–3 above, plus add render functions (`renderXxxChecklist`, `renderXxxEditList`), an add form wrapper in HTML, and branch in `renderAll()`.
@@ -155,4 +175,24 @@ SecurityID: `{Symbol}-0001-C-CT-{Currency}` (T+0) / `0002` (T+1). `Underlying` =
 }
 ```
 REPO entries: no `LiquidityAsset`, `SecurityType: "REPO"`, SecurityID uses `{Symbol}-#-U-CT-ARS`.
-TradingGroups: `BONOS`, `LETRAS`, `ONs`, `REPO`. SecurityTypes: `BOND`, `NEGOTIABLE_BOND`, `LETRAS_DEL_TESORO`.
+TITA Bonds TradingGroups: `BONOS`, `LETRAS`, `ONs`, `REPO`. SecurityTypes: `BOND`, `NEGOTIABLE_BOND`, `LETRAS_DEL_TESORO`.
+TITA Stocks TradingGroups: `CEDEAR`, `ADR`, `BR`, `SEC`, `REPO`. SecurityTypes: `CERTIFICATE_OF_DEPOSIT`, `STOCK`.
+
+**CANJE entry** (root key `CANJE`, one entry per TradingGroup):
+```json
+{
+  "TradingGroup": "AL30",
+  "MarketDataSourceId": "XMEV_1",
+  "OrderRoutingId": "XMEV_1",
+  "MinimumQty": 1,
+  "ToleranceThresholdMs": 3000,
+  "Assets": [
+    { "Symbol": "AL30D", "SecurityID": "AL30D-0001-C-CT-USD", "Currency": "USD", "SettlementType": "T_PLUS_0" },
+    { "Symbol": "AL30D", "SecurityID": "AL30D-0002-C-CT-USD", "Currency": "USD", "SettlementType": "T_PLUS_1" },
+    { "Symbol": "AL30C", "SecurityID": "AL30C-0001-C-CT-EXT", "Currency": "EXT", "SettlementType": "T_PLUS_0" },
+    { "Symbol": "AL30C", "SecurityID": "AL30C-0002-C-CT-EXT", "Currency": "EXT", "SettlementType": "T_PLUS_1" }
+  ],
+  "LiquidityAsset": { "Symbol": "AL30D", "SecurityID": "AL30D-0002-C-CT-USD", "Currency": "USD", "SettlementType": "T_PLUS_1" }
+}
+```
+Routing IDs (both `MarketDataSourceId` and `OrderRoutingId`) are derived dynamically from the loaded file.
