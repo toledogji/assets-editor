@@ -430,6 +430,18 @@ nav {
   margin-top: 4px;
 }
 
+.routing-groups-row {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.routing-section-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .routing-cards-row {
   display: flex;
   gap: 12px;

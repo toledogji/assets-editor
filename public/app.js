@@ -805,7 +805,7 @@ function renderRoutingBalance() {
 
     const max = Math.max(...routingIds().map(id => counts[id]), 1);
     const minCount = Math.min(...routingIds().map(id => counts[id]));
-    el.innerHTML = routingIds().map(id => {
+    el.innerHTML = '<div class="routing-cards-row">' + routingIds().map(id => {
       const n = counts[id];
       const pct = Math.round((n / max) * 100);
       const isFewest = n === minCount;
@@ -820,7 +820,7 @@ function renderRoutingBalance() {
           <div class="routing-bar-wrap"><div class="routing-bar" style="width:${pct}%"></div></div>
         </div>
       `;
-    }).join('');
+    }).join('') + '</div>';
   } else {
     // Count unique TradingGroups per PrimaryOrderRoutingId and LiquidityOrderRoutingId
     const primaryCounts = {};
@@ -864,10 +864,16 @@ function renderRoutingBalance() {
     };
 
     el.innerHTML = `
-      <div class="routing-section-label">Primary</div>
-      <div class="routing-cards-row">${makeCards(primaryCounts)}</div>
-      <div class="routing-section-label">Liquidity</div>
-      <div class="routing-cards-row">${makeCards(liquidityCounts)}</div>
+      <div class="routing-groups-row">
+        <div class="routing-section-group">
+          <div class="routing-section-label">Primary</div>
+          <div class="routing-cards-row">${makeCards(primaryCounts)}</div>
+        </div>
+        <div class="routing-section-group">
+          <div class="routing-section-label">Liquidity</div>
+          <div class="routing-cards-row">${makeCards(liquidityCounts)}</div>
+        </div>
+      </div>
     `;
   }
 }
